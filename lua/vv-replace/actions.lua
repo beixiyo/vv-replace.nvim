@@ -106,6 +106,10 @@ function M.attach(ctx)
     require('vv-replace.buffer').close()
   end, 'vv-replace: close panel')
 
+  map(buf, 'n', '<Esc>', function()
+    require('vv-replace.buffer').close()
+  end, 'vv-replace: close panel')
+
   map(buf, 'n', km.help, function()
     show_help(ctx)
   end, 'vv-replace: show this help')
