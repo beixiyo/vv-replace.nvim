@@ -246,6 +246,15 @@ function M.close()
   if ctx.source_buf and vim.api.nvim_buf_is_valid(ctx.source_buf) then
     pcall(vim.api.nvim_buf_clear_namespace, ctx.source_buf, ctx.namespace, 0, -1)
   end
+
+  -- 清除预览 diff 高亮
+  if ctx.state.preview_ns and vim.api.nvim_win_is_valid(ctx.prev_win) then
+    local prev_buf = vim.api.nvim_win_get_buf(ctx.prev_win)
+    if vim.api.nvim_buf_is_valid(prev_buf) then
+      pcall(vim.api.nvim_buf_clear_namespace, prev_buf, ctx.state.preview_ns, 0, -1)
+    end
+  end
+
   pcall(vim.api.nvim_del_augroup_by_id, ctx.augroup)
   if vim.api.nvim_buf_is_valid(ctx.buf) then
     pcall(vim.api.nvim_buf_delete, ctx.buf, { force = true })
@@ -276,6 +285,15 @@ function M._on_buf_gone(ctx)
     if ctx.source_buf and vim.api.nvim_buf_is_valid(ctx.source_buf) then
       pcall(vim.api.nvim_buf_clear_namespace, ctx.source_buf, ctx.namespace, 0, -1)
     end
+
+    -- 清除预览 diff 高亮
+    if ctx.state.preview_ns and vim.api.nvim_win_is_valid(ctx.prev_win) then
+      local prev_buf = vim.api.nvim_win_get_buf(ctx.prev_win)
+      if vim.api.nvim_buf_is_valid(prev_buf) then
+        pcall(vim.api.nvim_buf_clear_namespace, prev_buf, ctx.state.preview_ns, 0, -1)
+      end
+    end
+
     -- 清理 augroup
     pcall(vim.api.nvim_del_augroup_by_id, ctx.augroup)
     M.current = nil

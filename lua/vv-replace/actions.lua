@@ -176,6 +176,58 @@ function M.attach(ctx)
       end
     end,
   })
+
+  -- 结果区光标移动时预览对应文件行（不切换焦点）
+  local preview_ns = vim.api.nvim_create_namespace('vv-replace-preview')
+  ctx.state.preview_ns = preview_ns
+  local last_preview = { filename = nil, lnum = nil }
+
+  vim.api.nvim_create_autocmd('CursorMoved', {
+    group = ctx.augroup,
+    buffer = buf,
+    callback = function()
+      if ctx.state.closed or ctx.state.replacing then return end
+      if not vim.api.nvim_win_is_valid(ctx.prev_win) then return end
+
+      local mark = Render.mark_at_cursor(ctx)
+
+      if not mark then
+        M._clear_preview_diff(ctx.prev_win, preview_ns)
+        last_preview.filename = nil
+        last_preview.lnum = nil
+        return
+      end
+
+      local filename = mark.filename
+      local lnum = mark.lnum or 1
+      if mark.kind == 'file' then lnum = 1 end
+
+      -- 同文件同行 → 跳过
+      if filename == last_preview.filename and lnum == last_preview.lnum then return end
+
+      -- 文件切换 → 重新打开 + 重新渲染整个文件的 diff
+      local file_changed = (filename ~= last_preview.filename)
+      last_preview.filename = filename
+      last_preview.lnum = lnum
+
+      vim.api.nvim_win_call(ctx.prev_win, function()
+        if file_changed then
+          local cur_name = vim.api.nvim_buf_get_name(0)
+          if vim.fs.normalize(cur_name) ~= vim.fs.normalize(filename) then
+            vim.cmd('edit ' .. vim.fn.fnameescape(filename))
+          end
+        end
+
+        pcall(vim.api.nvim_win_set_cursor, 0, { lnum, (mark.col or 1) - 1 })
+        vim.cmd('normal! zz')
+      end)
+
+      if file_changed then
+        M._apply_file_diff(ctx, filename, preview_ns)
+      end
+    end,
+  })
+
   for _, key in ipairs({ 'i', 'I', 'a', 'A', 'o', 'O', 's', 'S', 'c', 'C', 'R' }) do
     vim.keymap.set('n', key, function()
       if in_input_row() then
@@ -183,6 +235,68 @@ function M.attach(ctx)
       end
       return '<Nop>'  -- 结果区：静音
     end, { buffer = buf, expr = true, silent = true })
+  end
+end
+
+---@param win integer
+---@param ns integer
+function M._clear_preview_diff(win, ns)
+  if not vim.api.nvim_win_is_valid(win) then return end
+
+  local prev_buf = vim.api.nvim_win_get_buf(win)
+  if vim.api.nvim_buf_is_valid(prev_buf) then
+    pcall(vim.api.nvim_buf_clear_namespace, prev_buf, ns, 0, -1)
+  end
+end
+
+---@param ctx VVReplaceCtx
+---@param filename string
+---@param ns integer
+function M._apply_file_diff(ctx, filename, ns)
+  if not vim.api.nvim_win_is_valid(ctx.prev_win) then return end
+
+  local prev_buf = vim.api.nvim_win_get_buf(ctx.prev_win)
+  if not vim.api.nvim_buf_is_valid(prev_buf) then return end
+
+  pcall(vim.api.nvim_buf_clear_namespace, prev_buf, ns, 0, -1)
+
+  -- 收集同文件所有 match marks
+  local file_marks = {}
+  for _, mark in pairs(ctx.state.result_marks) do
+    if mark.kind == 'match' and mark.filename == filename and mark.submatches then
+      file_marks[#file_marks + 1] = mark
+    end
+  end
+
+  if #file_marks == 0 then return end
+
+  local has_replacement = file_marks[1].submatches[1]
+    and file_marks[1].submatches[1].replacement
+
+  for _, mark in ipairs(file_marks) do
+    local lnum = (mark.lnum or 1) - 1
+
+    for _, sub in ipairs(mark.submatches) do
+      local s = sub.start or 0
+      local e = sub['end'] or s
+
+      local hl = has_replacement and 'VVReplaceMatchRemoved' or 'VVReplaceMatch'
+      pcall(vim.api.nvim_buf_set_extmark, prev_buf, ns, lnum, s, {
+        end_col = e,
+        hl_group = hl,
+      })
+
+      if sub.replacement then
+        local rep_text = (sub.replacement.text or ''):match('([^\n]*)') or ''
+
+        if rep_text ~= '' then
+          pcall(vim.api.nvim_buf_set_extmark, prev_buf, ns, lnum, e, {
+            virt_text = { { rep_text, 'VVReplaceMatchAdded' } },
+            virt_text_pos = 'inline',
+          })
+        end
+      end
+    end
   end
 end
 

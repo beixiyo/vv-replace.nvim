@@ -7,21 +7,29 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Neovim-0.10+-57A143?style=flat-square&logo=neovim&logoColor=white" alt="Requires Neovim 0.10+" />
   <img src="https://img.shields.io/badge/Lua-2C2D72?style=flat-square&logo=lua&logoColor=white" alt="Lua" />
-  <img src="https://img.shields.io/badge/ripgrep-required-orange?style=flat-square" alt="Requires ripgrep" />
+  <a href="https://github.com/BurntSushi/ripgrep"><img src="https://img.shields.io/badge/ripgrep_%E2%89%A513-required-orange?style=flat-square" alt="Requires ripgrep ≥13" /></a>
 </p>
 
 ---
 
+## 依赖
+
+| 依赖 | 说明 |
+|------|------|
+| [Neovim ≥ 0.10](https://github.com/neovim/neovim) | `vim.system`、extmark `invalid`、`vim.fs.normalize` |
+| [ripgrep ≥ 13](https://github.com/BurntSushi/ripgrep) | 搜索引擎，使用 `--json` 流式输出 + `--replace` 计算替换结果 |
+| [vv-utils.nvim](https://github.com/beixiyo/vv-utils.nvim) | 共享工具库（fs、help_panel、ui_window） |
+
 ## 为什么要这个插件
 
-[grug-far.nvim](https://github.com/MagicDuck/grug-far.nvim) 功能全面，但日常使用有几处不顺手：
+[grug-far.nvim](https://github.com/MagicDuck/grug-far.nvim) 日常使用有几处不顺手：
 
 | | grug-far | vv-replace |
 |---|---|---|
 | **默认模式** | 正则 — 输入 `foo(` 或 `a.b` 需手动转义 | 纯文本（plainText），`<S-Tab>` 切正则 |
 | **大小写** | 手敲 `-s`/`-i` 到 Flags 框 | smart-case：全小写自动 `-i`，含大写自动 `-s` |
 | **输入框** | 5 个（Search/Replace/Flags/Files/Paths） | 文件模式 2 个，项目模式 5 个 |
-| **替换预览** | 实时 diff | Replace 框有内容时每个匹配行下方显示绿色替换效果 |
+| **替换预览** | 实时 diff | 单行 inline diff（匹配标红 + 替换绿色）；光标移动时自动在源窗口预览整个文件的 diff |
 
 ## 安装
 
