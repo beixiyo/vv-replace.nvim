@@ -86,7 +86,7 @@ function M.attach(ctx)
     end
   end, 'vv-replace: cycle next input (Search/Replace/...)')
 
-  map(buf, { 'n', 'i' }, km.prev_input, function()
+  map(buf, { 'n', 'i' }, km.toggle_mode, function()
     -- Shift-Tab 按用户需求：始终切模式（不做 prev input）
     Inputs.toggle_mode(ctx)
     Render.flash_status(ctx, 'Mode → ' .. (Inputs.mode_display(ctx)[ctx.mode] or ctx.mode))

@@ -97,7 +97,7 @@ function M.render(ctx)
       -- 避开和 placeholder 的 eol 冲突
       local km = ctx.config and ctx.config.keymaps or {}
       local help_key = km.help or 'g?'
-      local toggle_key = km.prev_input or '<S-Tab>'
+      local toggle_key = km.toggle_mode or '<S-Tab>'
       local segs = {
         { ' ' .. field.label,                                    'VVReplaceLabel' },
         { '    ' .. (M.mode_display(ctx)[ctx.mode] or ctx.mode), 'VVReplaceLabelMode' },
@@ -249,7 +249,7 @@ function M.goto_field(ctx, name)
   pcall(vim.api.nvim_win_set_cursor, ctx.win, { row + 1, #line })
 end
 
--- Shift-Tab（normal）切换模式；insert 模式下走 prev_input（由 actions 分派）
+-- Shift-Tab（normal）切换模式；insert 模式下走 toggle_mode（由 actions 分派）
 ---@param ctx VVReplaceCtx
 function M.toggle_mode(ctx)
   ctx.mode = ctx.mode == 'plainText' and 'regex' or 'plainText'

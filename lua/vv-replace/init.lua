@@ -27,13 +27,13 @@
 local M = {}
 
 ---@class VVReplaceConfig
----@field position 'left'|'right'  侧边面板位置
----@field width integer  面板宽度（列）
----@field debounce_ms integer  输入去抖毫秒
----@field max_results integer  单次搜索结果条数上限，防大项目卡死
----@field context_lines integer  每个匹配上下文行数（0 = 关闭）
----@field default_mode 'plainText'|'regex'
----@field rg_extra_args string[]  追加给所有 rg 调用的额外参数
+---@field position 'left'|'right'  侧边面板位置 @default 'right'
+---@field width integer  面板宽度（列） @default 60
+---@field debounce_ms integer  输入去抖毫秒 @default 200
+---@field max_results integer  单次搜索结果条数上限，防大项目卡死 @default 10000
+---@field context_lines integer  每个匹配上下文行数（0 = 关闭） @default 0
+---@field default_mode 'plainText'|'regex' @default 'plainText'
+---@field rg_extra_args string[]  追加给所有 rg 调用的额外参数 @default {}
 ---@field keymaps VVReplaceKeymaps
 ---@field icons VVReplaceIcons
 local defaults = {
@@ -46,7 +46,7 @@ local defaults = {
   rg_extra_args = {},
   keymaps = {
     next_input = '<Tab>',
-    prev_input = '<S-Tab>',       -- 按用户要求：S-Tab 用来切模式（见 actions.lua）
+    toggle_mode = '<S-Tab>',       -- 按用户要求：S-Tab 用来切模式（见 actions.lua）
     replace_all = '<localleader>r',
     goto_match = '<CR>',
     close = 'q',
@@ -66,29 +66,29 @@ local defaults = {
 }
 
 ---@class VVReplaceKeymaps
----@field next_input string  Tab：下一个输入框
----@field prev_input string  Shift-Tab：切换模式 plainText ↔ regex
----@field replace_all string
----@field goto_match string
----@field close string
----@field help string
+---@field next_input string  Tab：下一个输入框 @default '<Tab>'
+---@field toggle_mode string  Shift-Tab：切换模式 plainText ↔ regex @default '<S-Tab>'
+---@field replace_all string @default '<localleader>r'
+---@field goto_match string @default '<CR>'
+---@field close string @default 'q'
+---@field help string @default 'g?'
 
 ---@class VVReplaceIcons
----@field plain string        mode 徽章：plainText（默认 NerdFont text-box）
----@field regex string        mode 徽章：regex（默认 NerdFont regex）
----@field next_input string   help 浮窗图标
----@field toggle_mode string  help 浮窗图标
----@field goto_match string   help 浮窗图标
----@field replace_all string  help 浮窗图标
----@field close string        help 浮窗图标
----@field help string         help 浮窗图标
----@field title string        help 浮窗标题图标
+---@field plain string        mode 徽章：plainText（默认 NerdFont text-box） @default '󰊄'
+---@field regex string        mode 徽章：regex（默认 NerdFont regex） @default ''
+---@field next_input string   help 浮窗图标 @default '󰁔'
+---@field toggle_mode string  help 浮窗图标 @default '󰁨'
+---@field goto_match string   help 浮窗图标 @default ''
+---@field replace_all string  help 浮窗图标 @default ''
+---@field close string        help 浮窗图标 @default ''
+---@field help string         help 浮窗图标 @default '󰌌'
+---@field title string        help 浮窗标题图标 @default ''
 
-M.config = defaults
+local config = defaults
 
 ---@param opts? table
 function M.setup(opts)
-  M.config = vim.tbl_deep_extend('force', defaults, opts or {})
+  config = vim.tbl_deep_extend('force', defaults, opts or {})
   require('vv-replace.highlight').setup()
 
   vim.api.nvim_create_user_command('VVReplace', function(args)
@@ -110,7 +110,7 @@ end
 
 ---@param opts? { scope?: 'project'|'file', cwd?: string, query?: string, range?: integer[] }
 function M.open(opts)
-  require('vv-replace.buffer').open(M.config, opts or {})
+  require('vv-replace.buffer').open(config, opts or {})
 end
 
 function M.close()
@@ -119,7 +119,13 @@ end
 
 ---@param opts? { scope?: 'project'|'file', cwd?: string, query?: string, range?: integer[] }
 function M.toggle(opts)
-  require('vv-replace.buffer').toggle(M.config, opts or {})
+  require('vv-replace.buffer').toggle(config, opts or {})
+end
+
+---获取当前配置（只读副本）
+---@return VVReplaceConfig
+function M.get_config()
+  return vim.deepcopy(config)
 end
 
 return M

@@ -50,7 +50,7 @@
     rg_extra_args = {},            -- 追加给 rg 的额外参数
     keymaps = {
       next_input  = '<Tab>',       -- 下一个输入框
-      prev_input  = '<S-Tab>',     -- 切换模式 plainText ↔ regex
+      toggle_mode = '<S-Tab>',     -- 切换模式 plainText ↔ regex
       replace_all = '<localleader>r', -- 替换全部（带确认）
       goto_match  = '<CR>',        -- 跳转到源文件对应行
       close       = 'q',
