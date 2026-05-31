@@ -26,23 +26,48 @@ local function map(buf, modes, lhs, rhs, desc)
   vim.keymap.set(modes, lhs, rhs, { buffer = buf, silent = true, nowait = true, desc = desc })
 end
 
+-- 绑定「切换」动作到一组键（单字符串或列表）。所有键在 normal 生效；
+-- 其中 Alt 键（<M-.../<A-...）额外在 insert 生效——可打印键（如 '.'/'I'）不能绑 insert（会变成输入）。
+---@param buf integer
+---@param lhs_list string|string[]|false|nil
+---@param rhs fun()
+---@param desc string
+local function map_toggle(buf, lhs_list, rhs, desc)
+  if not lhs_list or lhs_list == '' then return end
+  local keys = type(lhs_list) == 'table' and lhs_list or { lhs_list }
+  for _, k in ipairs(keys) do
+    if k and k ~= '' then
+      vim.keymap.set('n', k, rhs, { buffer = buf, silent = true, nowait = true, desc = desc })
+      if k:match('^<[MA]%-') then
+        vim.keymap.set('i', k, rhs, { buffer = buf, silent = true, nowait = true, desc = desc })
+      end
+    end
+  end
+end
+
+---@param ctx VVReplaceCtx
+local function focus_prev_win(ctx)
+  -- file/match 两分支都要回到源窗口，集中校验避免重复且防止失效时抛异常
+  if vim.api.nvim_win_is_valid(ctx.prev_win) then
+    pcall(vim.api.nvim_set_current_win, ctx.prev_win)
+  else
+    -- prev_win 已失效（用户手动关了源窗口）：退回上一个窗口
+    pcall(vim.cmd, 'wincmd p')
+  end
+end
+
 ---@param ctx VVReplaceCtx
 local function goto_match_under_cursor(ctx)
   local mark = Render.mark_at_cursor(ctx)
-  if not mark or mark.kind ~= 'match' then
+  if not mark then return end
+  if mark.kind == 'file' then
     -- 文件 header 行：跳文件开头
-    if mark and mark.kind == 'file' then
-      vim.api.nvim_set_current_win(ctx.prev_win)
-      vim.cmd('edit ' .. vim.fn.fnameescape(mark.filename))
-    end
+    focus_prev_win(ctx)
+    vim.cmd('edit ' .. vim.fn.fnameescape(mark.filename))
     return
   end
-  if vim.api.nvim_win_is_valid(ctx.prev_win) then
-    vim.api.nvim_set_current_win(ctx.prev_win)
-  else
-    -- prev_win 丢了（用户手动关了）：退回 split
-    vim.cmd('wincmd p')
-  end
+  if mark.kind ~= 'match' then return end
+  focus_prev_win(ctx)
   vim.cmd('edit ' .. vim.fn.fnameescape(mark.filename))
   pcall(vim.api.nvim_win_set_cursor, 0, { mark.lnum or 1, (mark.col or 1) - 1 })
   vim.cmd('normal! zz')
@@ -51,17 +76,23 @@ end
 ---@param ctx VVReplaceCtx
 local function show_help(ctx)
   local ic = ctx.config and ctx.config.icons or {}
+  local actions = {
+    ['cycle next input (Search/Replace/...)'] = { cat = 'Navigate', icon = ic.next_input },
+    ['toggle search mode (plainText ↔ regex)'] = { cat = 'Navigate', icon = ic.toggle_mode },
+    ['jump to match under cursor']            = { cat = 'Navigate', icon = ic.goto_match },
+    ['replace all matches (with confirm)']    = { cat = 'Replace',  icon = ic.replace_all },
+    ['close panel']                           = { cat = 'Panel',    icon = ic.close },
+    ['show this help']                        = { cat = 'Panel',    icon = ic.help },
+  }
+  -- 搜索范围切换仅 project scope 绑定，help 也只在该 scope 列出
+  if ctx.scope ~= 'file' then
+    actions['toggle hidden files']      = { cat = 'Navigate', icon = ic.toggle_hidden }
+    actions['toggle git-ignored files'] = { cat = 'Navigate', icon = ic.toggle_gitignored }
+  end
   require('vv-utils.help_panel').open({
     source_buf = ctx.buf,
     desc_prefix = 'vv-replace: ',
-    actions = {
-      ['cycle next input (Search/Replace/...)'] = { cat = 'Navigate', icon = ic.next_input },
-      ['toggle search mode (plainText ↔ regex)'] = { cat = 'Navigate', icon = ic.toggle_mode },
-      ['jump to match under cursor']            = { cat = 'Navigate', icon = ic.goto_match },
-      ['replace all matches (with confirm)']    = { cat = 'Replace',  icon = ic.replace_all },
-      ['close panel']                           = { cat = 'Panel',    icon = ic.close },
-      ['show this help']                        = { cat = 'Panel',    icon = ic.help },
-    },
+    actions = actions,
     categories = { 'Navigate', 'Replace', 'Panel' },
     title = 'vv-replace keymaps',
     title_icon = ic.title,
@@ -93,6 +124,23 @@ function M.attach(ctx)
     -- mode 变了但 inputs 字段没变 → on_change 会误判"没变"跳过搜索；直接 search_now
     Search.search_now(ctx)
   end, 'vv-replace: toggle search mode (plainText ↔ regex)')
+
+  -- 搜索范围切换（yazi/vv-explorer 风），仅 project scope（file scope 锁定单文件、显式路径无视忽略规则）：
+  --   . / <M-h>  显隐隐藏文件；I / <M-i>  显隐 .gitignore 忽略文件
+  if ctx.scope ~= 'file' then
+    map_toggle(buf, km.toggle_hidden, function()
+      Inputs.toggle_hidden(ctx)
+      Render.flash_status(ctx, 'Hidden files: ' .. (ctx.show_hidden and 'shown' or 'hidden'))
+      -- 范围变了但 inputs 字段没变 → on_change 会判"没变"跳过；直接 search_now
+      Search.search_now(ctx)
+    end, 'vv-replace: toggle hidden files')
+
+    map_toggle(buf, km.toggle_gitignored, function()
+      Inputs.toggle_gitignored(ctx)
+      Render.flash_status(ctx, 'Git-ignored files: ' .. (ctx.show_ignored and 'shown' or 'hidden'))
+      Search.search_now(ctx)
+    end, 'vv-replace: toggle git-ignored files')
+  end
 
   map(buf, 'n', km.goto_match, function()
     goto_match_under_cursor(ctx)
@@ -228,7 +276,13 @@ function M.attach(ctx)
     end,
   })
 
-  for _, key in ipairs({ 'i', 'I', 'a', 'A', 'o', 'O', 's', 'S', 'c', 'C', 'R' }) do
+  -- 结果区静音 insert-entry 键（避免 nomodifiable 下的 E21 噪音）。
+  -- 'I' 仅 file scope 在此 no-op：project scope 下 'I' 已绑为 toggle_gitignored（yazi 风全局开关），不能被覆盖
+  local expr_keys = { 'i', 'a', 'A', 'o', 'O', 's', 'S', 'c', 'C', 'R' }
+  if ctx.scope == 'file' then
+    expr_keys[#expr_keys + 1] = 'I'
+  end
+  for _, key in ipairs(expr_keys) do
     vim.keymap.set('n', key, function()
       if in_input_row() then
         return key  -- 输入行：放行原键

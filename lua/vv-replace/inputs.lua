@@ -96,6 +96,7 @@ function M.render(ctx)
       -- Search 的 label 行额外带 mode 徽章（+ S-Tab 切换提示） + （可选）range 徽章 + help 提示
       -- 避开和 placeholder 的 eol 冲突
       local km = ctx.config and ctx.config.keymaps or {}
+      local ic = ctx.config and ctx.config.icons or {}
       local help_key = km.help or 'g?'
       local toggle_key = km.toggle_mode or '<S-Tab>'
       local segs = {
@@ -103,6 +104,21 @@ function M.render(ctx)
         { '    ' .. (M.mode_display(ctx)[ctx.mode] or ctx.mode), 'VVReplaceLabelMode' },
         { '  (' .. toggle_key .. ')',                            'VVReplacePlaceholder' },
       }
+      -- 搜索范围徽章（仅 project scope）：分别显示 hidden / ignored 两个开关
+      -- 默认两关 → 显示提示键；已开启的项高亮列出
+      if ctx.scope ~= 'file' then
+        local function first_key(v) return (type(v) == 'table' and v[1]) or v end
+        local on = {}
+        if ctx.show_hidden then on[#on + 1] = (ic.toggle_hidden or '') .. ' hidden' end
+        if ctx.show_ignored then on[#on + 1] = (ic.toggle_gitignored or '') .. ' ignored' end
+        if #on > 0 then
+          segs[#segs + 1] = { '    ' .. table.concat(on, '  '), 'VVReplaceLabelMode' }
+        else
+          local hk = first_key(km.toggle_hidden) or '.'
+          local ik = first_key(km.toggle_gitignored) or 'I'
+          segs[#segs + 1] = { '  (' .. hk .. ' hidden, ' .. ik .. ' ignored)', 'VVReplacePlaceholder' }
+        end
+      end
       if ctx.target_range then
         segs[#segs + 1] = { string.format('    Lines %d-%d', ctx.target_range[1], ctx.target_range[2]), 'VVReplaceLabelMode' }
       end
@@ -253,6 +269,20 @@ end
 ---@param ctx VVReplaceCtx
 function M.toggle_mode(ctx)
   ctx.mode = ctx.mode == 'plainText' and 'regex' or 'plainText'
+  M.render(ctx)
+end
+
+-- 切换是否搜索隐藏文件（重渲染 Search 徽章）
+---@param ctx VVReplaceCtx
+function M.toggle_hidden(ctx)
+  ctx.show_hidden = not ctx.show_hidden
+  M.render(ctx)
+end
+
+-- 切换是否搜索 .gitignore 忽略文件（重渲染 Search 徽章）
+---@param ctx VVReplaceCtx
+function M.toggle_gitignored(ctx)
+  ctx.show_ignored = not ctx.show_ignored
   M.render(ctx)
 end
 

@@ -271,7 +271,13 @@ function M.flash_status(ctx, text, duration)
   ctx.state.flash_timer = t
   if not t then return end
   t:start(duration, 0, vim.schedule_wrap(function()
+    local is_current = ctx.state.flash_timer == t
+    -- 一次性 timer 触发后自行关闭，避免 handle 泄漏
+    pcall(function() t:stop(); t:close() end)
+    if is_current then ctx.state.flash_timer = nil end
     if ctx.state.closed then return end
+    -- 已被新的 flash 取代时，新 toast 正在显示，不应被旧的 last_status 覆盖
+    if not is_current then return end
     local last = ctx.state.last_status
     if last then
       M._paint_status(ctx, last.text, last.is_error and 'VVReplaceStatusError' or 'VVReplaceStatus')
@@ -304,7 +310,15 @@ end
 ---@param ctx VVReplaceCtx
 ---@return VVReplaceResultMark?
 function M.mark_at_cursor(ctx)
-  local row = vim.api.nvim_win_get_cursor(ctx.win)[1] - 1
+  local win = ctx.win
+  if not vim.api.nvim_win_is_valid(win) then
+    -- ctx.win 已失效（如原窗口被关、buffer 在别处 split 存活）：退回当前窗口（须显示同 buffer），否则安全返回 nil
+    win = vim.api.nvim_get_current_win()
+    if not vim.api.nvim_win_is_valid(win) or vim.api.nvim_win_get_buf(win) ~= ctx.buf then
+      return nil
+    end
+  end
+  local row = vim.api.nvim_win_get_cursor(win)[1] - 1
   return ctx.state.result_marks[row]
 end
 

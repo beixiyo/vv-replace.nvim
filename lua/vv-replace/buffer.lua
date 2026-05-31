@@ -24,6 +24,8 @@ M.FILETYPE = 'vv-replace'
 ---@field augroup integer
 ---@field extmark_ids table<string, integer>
 ---@field mode 'plainText'|'regex'
+---@field show_hidden boolean  true=搜索包含隐藏文件（rg --hidden）；默认 false
+---@field show_ignored boolean  true=搜索包含 .gitignore 忽略文件（rg --no-ignore）；默认 false
 ---@field scope 'project'|'file'
 ---@field cwd string
 ---@field target_file string?  scope='file' 时的目标文件绝对路径
@@ -41,6 +43,7 @@ M.FILETYPE = 'vv-replace'
 ---@field result_extmark_ids integer[]  结果区的高亮 extmark id，清结果时统一删
 ---@field last_status { text: string, is_error?: boolean }?  最近一次正式 status，供 flash 还原
 ---@field last_json any[]?  上次完整的 rg json 数组，供 replace 复用
+---@field last_searched_inputs table<string, string>?  最近一次实际跑搜索（写 last_json）所用的输入快照，供 replace 判新鲜
 ---@field searching boolean
 ---@field replacing boolean
 ---@field closed boolean
@@ -125,6 +128,8 @@ local function build_ctx(config, opts)
     augroup = vim.api.nvim_create_augroup('vv-replace-' .. tostring(vim.uv.hrtime()), { clear = true }),
     extmark_ids = {},
     mode = config.default_mode,
+    show_hidden = false,
+    show_ignored = false,
     scope = scope,
     cwd = cwd,
     target_file = target_file,

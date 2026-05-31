@@ -67,19 +67,31 @@ local function compute_new_content(old, matches)
 end
 
 ---@param ctx VVReplaceCtx
-function M.replace_all(ctx)
+---@param researched boolean?  内部用：true 表示刚为本次替换重搜过，跳过新鲜度判定防无限递归
+function M.replace_all(ctx, researched)
   if ctx.state.replacing then
     vim.notify('vv-replace: replace in progress', vim.log.levels.WARN)
     return
   end
-  if ctx.state.searching then
-    vim.notify('vv-replace: wait for search to finish', vim.log.levels.WARN)
+
+  local values = Inputs.get_values(ctx)
+  -- search 为空守卫前置：空搜索直接退出，不触发重搜
+  if not values.search or values.search == '' then
+    vim.notify('vv-replace: search is empty', vim.log.levels.WARN)
     return
   end
 
-  local values = Inputs.get_values(ctx)
-  if not values.search or values.search == '' then
-    vim.notify('vv-replace: search is empty', vim.log.levels.WARN)
+  -- 新鲜度判定：on_change 会「立刻」更新 last_inputs 但 debounce 后才真正搜索，
+  -- 故不能用 last_inputs 判陈旧；要看 last_json 实际是用哪次输入算出来的（last_searched_inputs）。
+  -- 用户改 Replace 框后 debounce 内立即按替换时，last_json 仍是旧快照，必须先用当前输入重搜再替换。
+  local fresh = ctx.state.last_searched_inputs
+    and vim.deep_equal(values, ctx.state.last_searched_inputs)
+    and not ctx.state.searching
+  if not researched and not fresh then
+    Search.search_now(ctx, function()
+      if ctx.state.closed or ctx.state.replacing then return end
+      M.replace_all(ctx, true)
+    end)
     return
   end
   if not values.replace or values.replace == '' then
@@ -124,9 +136,18 @@ function M.replace_all(ctx)
   local ok_count = 0
   local fail = {}
   local function step(i)
+    -- 面板已关闭 / buffer 已被 wipe 时安全中止：剩余文件可重新搜索替换补齐，
+    -- 已替换的内容不会再命中，故中止可恢复，不会留下半成品状态
+    if ctx.state.closed or not vim.api.nvim_buf_is_valid(ctx.buf) then
+      ctx.state.replacing = false
+      return
+    end
     if i > #files then
       -- 完成
-      vim.bo[ctx.buf].modifiable = true
+      -- buf 可能在最后一个 step 排队后才失效，这里再判一次再写 modifiable
+      if vim.api.nvim_buf_is_valid(ctx.buf) then
+        vim.bo[ctx.buf].modifiable = true
+      end
       ctx.state.replacing = false
       if #fail > 0 then
         Render.render_status(ctx, string.format('%d done, %d failed', ok_count, #fail), true)

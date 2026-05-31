@@ -47,6 +47,8 @@ local defaults = {
   keymaps = {
     next_input = '<Tab>',
     toggle_mode = '<S-Tab>',       -- 按用户要求：S-Tab 用来切模式（见 actions.lua）
+    toggle_hidden     = { '.', '<M-h>' },  -- yazi 风：显隐隐藏文件（dotfile/.env 等）。Alt 键 insert 模式也生效
+    toggle_gitignored = { 'I', '<M-i>' },  -- yazi 风：显隐 .gitignore 忽略文件。Alt 键 insert 模式也生效
     replace_all = '<localleader>r',
     goto_match = '<CR>',
     close = 'q',
@@ -57,6 +59,8 @@ local defaults = {
     regex       = '',   -- mode 徽章: regex
     next_input  = '󰁔',   -- help: Navigate / next input
     toggle_mode = '󰁨',     -- help: Navigate / toggle mode
+    toggle_hidden     = '',  -- 搜索范围徽章 / help: 显隐隐藏文件
+    toggle_gitignored = '',  -- 搜索范围徽章 / help: 显隐 .gitignore 忽略文件
     goto_match  = '',  -- help: Navigate / goto match
     replace_all = '',  -- help: Replace / replace all
     close       = '',    -- help: Panel / close
@@ -68,6 +72,8 @@ local defaults = {
 ---@class VVReplaceKeymaps
 ---@field next_input string  Tab：下一个输入框 @default '<Tab>'
 ---@field toggle_mode string  Shift-Tab：切换模式 plainText ↔ regex @default '<S-Tab>'
+---@field toggle_hidden string|string[]  切换显隐隐藏文件（dotfile/.env），yazi 风 @default { '.', '<M-h>' }
+---@field toggle_gitignored string|string[]  切换显隐 .gitignore 忽略文件，yazi 风 @default { 'I', '<M-i>' }
 ---@field replace_all string @default '<localleader>r'
 ---@field goto_match string @default '<CR>'
 ---@field close string @default 'q'
@@ -78,6 +84,8 @@ local defaults = {
 ---@field regex string        mode 徽章：regex（默认 NerdFont regex） @default ''
 ---@field next_input string   help 浮窗图标 @default '󰁔'
 ---@field toggle_mode string  help 浮窗图标 @default '󰁨'
+---@field toggle_hidden string  搜索范围徽章 / help 浮窗图标（显隐隐藏文件） @default ''
+---@field toggle_gitignored string  搜索范围徽章 / help 浮窗图标（显隐忽略文件） @default ''
 ---@field goto_match string   help 浮窗图标 @default ''
 ---@field replace_all string  help 浮窗图标 @default ''
 ---@field close string        help 浮窗图标 @default ''

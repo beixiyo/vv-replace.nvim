@@ -56,6 +56,16 @@ local function build_rg_args(ctx, values)
   end
   -- regex 模式用 rg 默认
 
+  -- 搜索范围（yazi/vv-explorer 风的两个独立开关，默认与 rg 默认行为一致）：
+  --   show_hidden  → --hidden    包含隐藏文件（dotfile/.env 等）
+  --   show_ignored → --no-ignore 包含 .gitignore 等忽略文件（node_modules/dist 等）
+  if ctx.show_hidden then
+    args[#args + 1] = '--hidden'
+  end
+  if ctx.show_ignored then
+    args[#args + 1] = '--no-ignore'
+  end
+
   -- context
   if ctx.config.context_lines and ctx.config.context_lines > 0 then
     args[#args + 1] = '--context=' .. tostring(ctx.config.context_lines)
@@ -81,8 +91,10 @@ local function build_rg_args(ctx, values)
   end
 
   -- 替换（传给 rg 就有 submatch.replacement.text，供预览和 replace 写回复用）
-  -- 空替换也要传 --replace=（空串），让 rg 输出 replacement.text=""，否则空替换（删除匹配）不生效
-  if values.replace ~= nil then
+  -- Replace 框为空时不传 --replace=，让预览走普通搜索高亮（VVReplaceMatch）而非删除红；
+  -- 删除匹配仍可工作：compute_new_content 在 submatch 无 replacement 时 rep 默认 ''（即删除），
+  -- 且删除受 replace_all 的「Delete all matches?」确认保护，不会误删
+  if values.replace ~= nil and values.replace ~= '' then
     args[#args + 1] = '--replace=' .. values.replace
   end
 
@@ -168,7 +180,8 @@ end
 
 -- 真正跑一次搜索
 ---@param ctx VVReplaceCtx
-local function run_search(ctx)
+---@param on_done fun()?  本次搜索完成（写完 last_json）后回调，供 replace 等到新鲜结果再继续
+local function run_search(ctx, on_done)
   if ctx.state.closed then return end
   abort_current(ctx)
 
@@ -178,6 +191,8 @@ local function run_search(ctx)
   -- 空搜索词：清空结果区
   if not args then
     ctx.state.last_json = nil
+    -- 记录本次搜索所用输入：replace 用它判断 last_json 是否对应当前输入（而非已被提前更新的 last_inputs）
+    ctx.state.last_searched_inputs = vim.deepcopy(values)
     ctx.state.searching = false
     Render.clear_results(ctx)
     Render.render_status(ctx, '')
@@ -235,8 +250,11 @@ local function run_search(ctx)
       ctx.state.searching = false
       local filtered = filter_by_range(collected, ctx.target_range)
       ctx.state.last_json = filtered
+      -- 与 last_json 同步记录其来源输入：被 abort/kill 的旧搜索因上方 finished 守卫不会走到这里，
+      -- 故 last_searched_inputs 始终对应当前 last_json，replace 据此判新鲜
+      ctx.state.last_searched_inputs = vim.deepcopy(values)
 
-      local parsed = Render.parse_results(filtered, values.replace ~= nil)
+      local parsed = Render.parse_results(filtered, values.replace ~= nil and values.replace ~= '')
       Render.render_results(ctx, parsed)
 
       if result.code ~= 0 and result.code ~= 1 and parsed.stats.files == 0 then
@@ -248,6 +266,9 @@ local function run_search(ctx)
           truncated and '  (truncated)' or '')
         Render.render_status(ctx, status)
       end
+
+      -- 结果已落盘且渲染完毕，通知等待方（如 replace 重搜后继续）
+      if on_done then on_done() end
     end)
   end)
 
@@ -287,9 +308,10 @@ end
 
 -- 手动立即搜索（供 actions 调用，例如 <CR> / :VVReplaceRefresh）
 ---@param ctx VVReplaceCtx
-function M.search_now(ctx)
+---@param on_done fun()?  搜索完成回调，供 replace 等到新鲜结果再继续替换
+function M.search_now(ctx, on_done)
   if ctx.state.search_timer then ctx.state.search_timer:stop() end
-  run_search(ctx)
+  run_search(ctx, on_done)
 end
 
 return M
