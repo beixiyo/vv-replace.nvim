@@ -43,8 +43,16 @@ local function compute_new_content(old, matches)
   for _, m in ipairs(matches) do
     local offset = m.data.absolute_offset
     if offset >= last then
+      -- lines.text 仅对合法 UTF-8 行存在；含非法字节的行 rg 只给 lines.bytes(base64)
+      -- 回退解码原始字节，与 group_matches_by_file 对 path 的处理一致
+      local L = m.data.lines
+      local match_text = L.text or (L.bytes and vim.base64.decode(L.bytes)) or ''
+      -- 陈旧守卫：搜索后文件若在磁盘上改动，缓存的 offset 会指向错误字节并悄悄损坏文件
+      -- 拼接前校验缓存行仍处在 offset 所指位置，不符就报错（外层 pcall 接住，文件保持完整）
+      if old:sub(offset + 1, offset + #match_text) ~= match_text then
+        error('stale: file changed on disk since search')
+      end
       out[#out + 1] = old:sub(last + 1, offset)
-      local match_text = m.data.lines.text or ''
       local sub_last = 0
       local rebuilt = {}
       for _, sub in ipairs(m.data.submatches or {}) do
@@ -82,8 +90,8 @@ function M.replace_all(ctx, researched)
   end
 
   -- 新鲜度判定：on_change 会「立刻」更新 last_inputs 但 debounce 后才真正搜索，
-  -- 故不能用 last_inputs 判陈旧；要看 last_json 实际是用哪次输入算出来的（last_searched_inputs）。
-  -- 用户改 Replace 框后 debounce 内立即按替换时，last_json 仍是旧快照，必须先用当前输入重搜再替换。
+  -- 故不能用 last_inputs 判陈旧；要看 last_json 实际是用哪次输入算出来的（last_searched_inputs）
+  -- 用户改 Replace 框后 debounce 内立即按替换时，last_json 仍是旧快照，必须先用当前输入重搜再替换
   local fresh = ctx.state.last_searched_inputs
     and vim.deep_equal(values, ctx.state.last_searched_inputs)
     and not ctx.state.searching
@@ -170,8 +178,11 @@ function M.replace_all(ctx, researched)
       if not ok_read then
         fail[#fail + 1] = file .. ' (read failed: ' .. tostring(old) .. ')'
       else
-        local new_content = compute_new_content(old, grouped[file])
-        if new_content ~= old then
+        local ok_new, new_content = pcall(compute_new_content, old, grouped[file])
+        if not ok_new then
+          -- 陈旧/非法字节等导致拼接失败：不写入，列入失败清单，文件保持原样
+          fail[#fail + 1] = file .. ' (' .. tostring(new_content) .. ')'
+        elseif new_content ~= old then
           local ok_write, werr = pcall(fs.write_all, file, new_content)
           if not ok_write then
             fail[#fail + 1] = file .. ' (' .. tostring(werr) .. ')'

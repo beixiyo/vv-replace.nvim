@@ -28,11 +28,12 @@ end
 ---@field label string
 ---@field placeholder string
 ---@field scopes table<string, true>  哪些 scope 下可见（'file' / 'project'）
+---@field notrim? boolean  取值时不做 vim.trim，保留首尾空白（replace 内容字段需要）
 
 ---@type VVReplaceField[]
 M.FIELDS = {
   { name = 'search',  label = 'Search',  placeholder = 'Search pattern...',                scopes = { file = true, project = true } },
-  { name = 'replace', label = 'Replace', placeholder = 'Replace (empty = delete matches)', scopes = { file = true, project = true } },
+  { name = 'replace', label = 'Replace', placeholder = 'Replace (empty = delete matches)', scopes = { file = true, project = true }, notrim = true },
   { name = 'include', label = 'Include', placeholder = 'e.g. *.lua, src/**',               scopes = { project = true } },
   { name = 'exclude', label = 'Exclude', placeholder = 'e.g. *.log, test/**',              scopes = { project = true } },
   { name = 'cwd',     label = 'Cwd',     placeholder = 'default: current cwd',             scopes = { project = true } },
@@ -201,6 +202,13 @@ function M.get_value(ctx, name)
   local row = field_row(ctx, name)
   if not row then return '' end
   local line = vim.api.nvim_buf_get_lines(ctx.buf, row, row + 1, false)[1] or ''
+  -- 内容字段（replace）保留首尾空白：用户可能有意输入缩进或尾随空格，trim 会写错字节
+  for _, field in ipairs(M.FIELDS) do
+    if field.name == name then
+      if field.notrim then return line end
+      break
+    end
+  end
   return vim.trim(line)
 end
 

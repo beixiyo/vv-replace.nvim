@@ -12,6 +12,9 @@
 - **Single-line inline diff**: replace preview in the results panel now uses one line per match (matched text highlighted + replacement as inline virtual text), instead of two separate lines. Faster `j`/`k` navigation.
 
 ### Fixed
+- 搜索后文件在磁盘上被改动（如另一窗口编辑保存）再替换，不再用陈旧的字节偏移拼接而悄悄损坏文件；现在拼接前会校验缓存行仍处在原位置，不符则该文件不写入并列入失败清单，可重新搜索后再替换
+- 匹配行含非法 UTF-8 字节（rg 只给 `lines.bytes` 而无 `lines.text`）时替换不再注入多余字符、漏替该行或重复内容；现在回退用 base64 解码原始字节，非法字节原样保留、所有匹配正确替换
+- Replace 框首尾空白不再被 `vim.trim` 悄悄抹掉；现在 replace 内容字段保留有意输入的缩进或尾随空格写盘（search/include/exclude/cwd 仍保持 trim）
 - 替换进行中关闭面板（`q` / `<Esc>` 或 `:q` / `:bd`）不再抛 `Invalid buffer id` 错误、也不再让替换状态卡死；现在关闭后会安全中止，剩余匹配可重新搜索替换补齐
 - 改完 Replace 框后立即按替换不再可能用改动前的旧替换文本写盘；替换前若搜索结果尚未跟上当前输入，会自动先重新搜索，确保写盘内容与界面一致
 - Replace 框为空时结果预览不再把所有匹配标成删除红；现在按普通搜索高亮，删除态只在确认删除时才呈现（空替换=删除匹配的语义不变，仍受 `Delete all matches?` 确认保护）
