@@ -5,6 +5,7 @@
 --   <S-Tab>   (n+i) 切换模式 plainText ↔ regex
 --   <C-g>     (n+i) 静音（屏蔽 vim 默认 file-info）
 --   <CR>      (n)   结果行 → 跳到源文件
+--   <C-n>/<C-p> (n+i) 跳到下一个/上一个匹配（光标移到匹配行，CursorMoved 自动预览源文件）
 --   <localleader>r  (n) 替换全部（带确认）
 --   q         (n)   关闭
 --   g?        (n)   帮助
@@ -27,7 +28,7 @@ local function map(buf, modes, lhs, rhs, desc)
 end
 
 -- 绑定「切换」动作到一组键（单字符串或列表）。所有键在 normal 生效；
--- 其中 Alt 键（<M-.../<A-...）额外在 insert 生效——可打印键（如 '.'/'I'）不能绑 insert（会变成输入）。
+-- 其中 Alt 键（<M-.../<A-...）额外在 insert 生效——可打印键（如 '.'/'I'）不能绑 insert（会变成输入）
 ---@param buf integer
 ---@param lhs_list string|string[]|false|nil
 ---@param rhs fun()
@@ -73,6 +74,48 @@ local function goto_match_under_cursor(ctx)
   vim.cmd('normal! zz')
 end
 
+-- 结果区是否有任意匹配行（无结果时 C-n/C-p 静默不打扰）
+---@param ctx VVReplaceCtx
+---@return boolean
+local function has_match(ctx)
+  for _, m in pairs(ctx.state.result_marks or {}) do
+    if m.kind == 'match' then return true end
+  end
+  return false
+end
+
+-- 把面板光标移到下一个（dir=1）/上一个（dir=-1）匹配行，到头回绕
+-- 只移面板光标——CursorMoved autocmd 会自动预览对应源文件行（与 j/k 一致）
+---@param ctx VVReplaceCtx
+---@param dir 1|-1
+local function goto_match_relative(ctx, dir)
+  if not vim.api.nvim_win_is_valid(ctx.win) then return end
+
+  local marks = ctx.state.result_marks or {}
+  local rows = {}
+  for row, m in pairs(marks) do
+    if m.kind == 'match' then rows[#rows + 1] = row end
+  end
+  if #rows == 0 then return end
+  table.sort(rows)
+
+  local cur = vim.api.nvim_win_get_cursor(ctx.win)[1] - 1   -- 0-based
+  local target
+  if dir > 0 then
+    for _, r in ipairs(rows) do
+      if r > cur then target = r break end
+    end
+    target = target or rows[1]              -- 末尾回绕到第一个
+  else
+    for i = #rows, 1, -1 do
+      if rows[i] < cur then target = rows[i] break end
+    end
+    target = target or rows[#rows]          -- 开头回绕到最后一个
+  end
+
+  pcall(vim.api.nvim_win_set_cursor, ctx.win, { target + 1, 0 })
+end
+
 ---@param ctx VVReplaceCtx
 local function show_help(ctx)
   local ic = ctx.config and ctx.config.icons or {}
@@ -80,6 +123,8 @@ local function show_help(ctx)
     ['cycle next input (Search/Replace/...)'] = { cat = 'Navigate', icon = ic.next_input },
     ['toggle search mode (plainText ↔ regex)'] = { cat = 'Navigate', icon = ic.toggle_mode },
     ['jump to match under cursor']            = { cat = 'Navigate', icon = ic.goto_match },
+    ['jump to next match']                    = { cat = 'Navigate', icon = ic.next_match },
+    ['jump to previous match']                = { cat = 'Navigate', icon = ic.prev_match },
     ['replace all matches (with confirm)']    = { cat = 'Replace',  icon = ic.replace_all },
     ['close panel']                           = { cat = 'Panel',    icon = ic.close },
     ['show this help']                        = { cat = 'Panel',    icon = ic.help },
@@ -106,7 +151,7 @@ function M.attach(ctx)
   local km = ctx.config.keymaps
 
   -- Tab / S-Tab 在 n+i 都生效。i 模式下先退到 n 不行（会破坏 cursor 位置），
-  -- 直接执行并保持 insert。
+  -- 直接执行并保持 insert
   map(buf, { 'n', 'i' }, km.next_input, function()
     Inputs.goto_sibling(ctx, 1)
     -- 确保 cursor 到行末（光标保持在输入位置），若当前是 normal 切 insert
@@ -145,6 +190,22 @@ function M.attach(ctx)
   map(buf, 'n', km.goto_match, function()
     goto_match_under_cursor(ctx)
   end, 'vv-replace: jump to match under cursor')
+
+  -- C-n/C-p：跳下一个/上一个匹配，normal + insert 都生效
+  -- insert（搜索框打字时）先 stopinsert 再跳到结果区匹配行；无结果时不打扰、也不退出 insert
+  local function nav_match(dir)
+    return function()
+      if not has_match(ctx) then return end
+      if vim.api.nvim_get_mode().mode:match('^i') then
+        vim.cmd('stopinsert')
+        vim.schedule(function() goto_match_relative(ctx, dir) end)
+      else
+        goto_match_relative(ctx, dir)
+      end
+    end
+  end
+  map(buf, { 'n', 'i' }, km.next_match, nav_match(1), 'vv-replace: jump to next match')
+  map(buf, { 'n', 'i' }, km.prev_match, nav_match(-1), 'vv-replace: jump to previous match')
 
   map(buf, 'n', km.replace_all, function()
     Replace.replace_all(ctx)
@@ -187,8 +248,8 @@ function M.attach(ctx)
     goto_match_under_cursor(ctx)
   end, { buffer = buf, silent = true })
 
-  -- Neovim 的 virt_lines_above 在 row 0 上方默认不显示（窗口顶部无"上方"空间）。
-  -- 用 winrestview({topfill=1}) 强制留一行，让 Search label + mode badge 可见。
+  -- Neovim 的 virt_lines_above 在 row 0 上方默认不显示（窗口顶部无"上方"空间）
+  -- 用 winrestview({topfill=1}) 强制留一行，让 Search label + mode badge 可见
   -- 参考：grug-far utils.fixShowTopVirtLines / neovim issue #16166
   local function fix_top_virt_line()
     if ctx.state.closed or not vim.api.nvim_win_is_valid(ctx.win) then return end
@@ -206,9 +267,9 @@ function M.attach(ctx)
   })
   vim.schedule(fix_top_virt_line)
 
-  -- 结果区禁用 Insert：CursorMoved 根据光标位置动态 modifiable。
-  -- 输入区 → modifiable=true（正常编辑）；结果区 → modifiable=false（任何编辑入口会弹"not modifiable"，防止误改结果）。
-  -- 额外把 insert-entry 键在结果区 no-op 掉，避免 E21 报错噪音。
+  -- 结果区禁用 Insert：CursorMoved 根据光标位置动态 modifiable
+  -- 输入区 → modifiable=true（正常编辑）；结果区 → modifiable=false（任何编辑入口会弹"not modifiable"，防止误改结果）
+  -- 额外把 insert-entry 键在结果区 no-op 掉，避免 E21 报错噪音
   local function in_input_row()
     local row = vim.api.nvim_win_get_cursor(ctx.win)[1] - 1
     return Inputs.field_at_row(ctx, row) ~= nil
@@ -276,7 +337,7 @@ function M.attach(ctx)
     end,
   })
 
-  -- 结果区静音 insert-entry 键（避免 nomodifiable 下的 E21 噪音）。
+  -- 结果区静音 insert-entry 键（避免 nomodifiable 下的 E21 噪音）
   -- 'I' 仅 file scope 在此 no-op：project scope 下 'I' 已绑为 toggle_gitignored（yazi 风全局开关），不能被覆盖
   local expr_keys = { 'i', 'a', 'A', 'o', 'O', 's', 'S', 'c', 'C', 'R' }
   if ctx.scope == 'file' then

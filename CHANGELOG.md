@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Added
+- **匹配项快速跳转**：面板内 `<C-n>` / `<C-p>` 跳到下一个 / 上一个匹配（到头回绕），normal 与 insert 模式均生效（insert 下先退出插入再跳）；光标移到匹配行后 CursorMoved 自动预览对应源文件。键位 `keymaps.next_match` / `keymaps.prev_match` 可配置
+- **`open_visual({ scope?, use })` 入口 API**：封装可视选区读取，供 spec 的 v 模式键位一行调用——`use='query'` 把单行选区预填为搜索词（不限范围），`use='range'` 把选中行作为替换范围（自动按 file scope，全局替换无范围概念）
 - **搜索范围切换**（project scope，yazi / vv-explorer 风）：两个独立开关——`.`（或 `<M-h>`）显隐**隐藏文件**（`--hidden`）、`I`（或 `<M-i>`）显隐 **`.gitignore` 忽略文件**（`--no-ignore`）。默认两者皆关（与 ripgrep 默认一致）；Search 标签旁有状态徽章（默认显示 `(. hidden, I ignored)` 提示，开启的项高亮列出），切换即重搜。解决「搜不到 `node_modules`/`dist`/`.env` 等被忽略或隐藏文件」的困惑——这类文件 rg 默认不搜，需显式开启。`Alt` 键在 insert 模式也生效（输入时可直接切换）；键位 `keymaps.toggle_hidden` / `keymaps.toggle_gitignored` 可配置（支持单键或键列表）
 - **Live preview**: moving cursor over result items automatically opens the corresponding file and line in the source window (without switching focus).
 - **File-level diff preview**: when entering a file's results, all matches in that file are highlighted in the source window — matched text shown as removed (red), replacement as inline virtual text (green).

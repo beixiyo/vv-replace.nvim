@@ -53,6 +53,8 @@
       toggle_mode = '<S-Tab>',     -- 切换模式 plainText ↔ regex
       replace_all = '<localleader>r', -- 替换全部（带确认）
       goto_match  = '<CR>',        -- 跳转到源文件对应行
+      next_match  = '<C-n>',       -- 跳到下一个匹配（normal + insert）
+      prev_match  = '<C-p>',       -- 跳到上一个匹配（normal + insert）
       close       = 'q',
       help        = 'g?',
     },
@@ -87,8 +89,14 @@
 
 ### 入口键位
 
+> 可视选区入口推荐用 `open_visual({ scope?, use })` 封装：`use='query'` 选区作搜索词、`use='range'` 选区作替换范围（range 仅 `file` scope 生效，全局替换无范围概念）
+
 | 键 | 作用 |
 |----|------|
 | `<leader>sR` | 项目级搜索替换（5 字段：Search / Replace / Include / Exclude / Cwd） |
 | `<leader>sr` | 当前文件搜索替换（2 字段：Search / Replace） |
-| `<leader>sR`（visual） | 用选区预填 Search |
+| `<leader>sr`（visual） | `open_visual({ scope='file', use='query' })`：选区作搜索词，全文件替换 |
+| `<leader>sR`（visual） | `open_visual({ use='query' })`：选区作搜索词，工作区替换 |
+| `<leader>sv`（visual） | `open_visual({ scope='file', use='range' })`：仅在选中行内查找替换 |
+
+面板内 `<C-n>` / `<C-p>` 跳到下一个 / 上一个匹配（normal 与 insert 均可），光标移动时自动预览源文件

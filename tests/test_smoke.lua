@@ -3,8 +3,8 @@
 -- 运行方式：luajit tests/test_smoke.lua（纯逻辑测试）
 -- 或在 nvim 中 :luafile tests/test_smoke.lua
 --
--- 注意：此测试仅覆盖纯 lua 逻辑（不依赖 nvim API 的部分）。
--- Timer / 进程泄漏等运行时行为需要在 nvim 中手动验证。
+-- 注意：此测试仅覆盖纯 lua 逻辑（不依赖 nvim API 的部分）
+-- Timer / 进程泄漏等运行时行为需要在 nvim 中手动验证
 
 local passed = 0
 local failed = 0

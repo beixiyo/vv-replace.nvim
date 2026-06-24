@@ -1,7 +1,7 @@
 -- 结果渲染：rg json 解析 + buffer 写入 + 高亮
 --
 -- 结构约定：
---   header_row（由 results_header extmark 定位）上方是输入区，下方是结果区。
+--   header_row（由 results_header extmark 定位）上方是输入区，下方是结果区
 --   结果区布局：
 --     row header     → 空行，virt_text 显示状态（"N 个匹配 / M 个文件"）
 --     row header + 1 → <文件路径>  (N)

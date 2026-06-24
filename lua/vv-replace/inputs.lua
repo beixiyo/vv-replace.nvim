@@ -56,7 +56,7 @@ function M.results_header_row(ctx)
 end
 
 -- 渲染所有可见字段：确保 buffer 有足够行数，每个字段行用 extmark 标起始，
--- label 通过 virt_lines_above 显示，空行显示 placeholder。
+-- label 通过 virt_lines_above 显示，空行显示 placeholder
 ---@param ctx VVReplaceCtx
 function M.render(ctx)
   local buf = ctx.buf
@@ -167,8 +167,8 @@ function M.render(ctx)
   })
 end
 
--- 返回 field extmark 的当前行（动态获取，应对用户插入/删除行）。
--- 若 extmark 失效（用户清空 buffer）返回 nil。
+-- 返回 field extmark 的当前行（动态获取，应对用户插入/删除行）
+-- 若 extmark 失效（用户清空 buffer）返回 nil
 ---@param ctx VVReplaceCtx
 ---@param name string
 ---@return integer?
@@ -182,7 +182,7 @@ local function field_row(ctx, name)
   return row
 end
 
--- 根据 0-based row 判断所在字段 name；非任何字段行返回 nil。
+-- 根据 0-based row 判断所在字段 name；非任何字段行返回 nil
 ---@param ctx VVReplaceCtx
 ---@param row integer
 ---@return string?
@@ -222,9 +222,9 @@ function M.get_values(ctx)
   return values
 end
 
--- 填充初始值。render 必须已调用过。
+-- 填充初始值。render 必须已调用过
 -- 用 set_text 而非 set_lines：set_lines 会把同文件相邻字段的 left-gravity extmark
--- 连带 virt_lines_above 一起向上挤（Neovim 内部把 virt_line 视作 extmark 的前缀）。
+-- 连带 virt_lines_above 一起向上挤（Neovim 内部把 virt_line 视作 extmark 的前缀）
 ---@param ctx VVReplaceCtx
 ---@param values table<string, string>
 function M.fill(ctx, values)
@@ -247,7 +247,7 @@ function M.fill(ctx, values)
   end
 end
 
--- Tab 循环切换：当前在字段 i → 跳到 i+1（末尾回 1）。光标不在任何字段时跳 search。
+-- Tab 循环切换：当前在字段 i → 跳到 i+1（末尾回 1）。光标不在任何字段时跳 search
 ---@param ctx VVReplaceCtx
 ---@param direction 1|-1
 function M.goto_sibling(ctx, direction)
