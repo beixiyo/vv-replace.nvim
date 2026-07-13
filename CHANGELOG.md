@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.0] - 2026-07-13
 
 ### Added
 - **匹配项快速跳转**：面板内 `<C-n>` / `<C-p>` 跳到下一个 / 上一个匹配（到头回绕），normal 与 insert 模式均生效（insert 下先退出插入再跳）；光标移到匹配行后 CursorMoved 自动预览对应源文件。键位 `keymaps.next_match` / `keymaps.prev_match` 可配置
