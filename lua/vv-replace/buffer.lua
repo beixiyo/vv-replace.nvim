@@ -3,7 +3,7 @@
 -- 设计：
 --   * 单例 —— 同时只允许一个 vv-replace 面板，简化状态
 --   * buffer 创建后 bufhidden='wipe'，关闭即销毁（不像 vv-explorer 那样保留）
---     —— 因为搜索状态不需要持久化，每次打开都是全新会话
+--     —— 搜索结果不持久化；各输入框历史由 vv-utils.history 按字段独立保留
 --   * 打开时记录 prev_win，关闭时 focus 回去
 --   * autocmd 在 augroup 里管理，close 时整组清理
 
@@ -41,6 +41,8 @@ M.FILETYPE = 'vv-replace'
 ---@field rg_abort fun()?  当前搜索可中止
 ---@field result_marks table<integer, VVReplaceResultMark>  key=buffer row
 ---@field result_extmark_ids integer[]  结果区的高亮 extmark id，清结果时统一删
+---@field preview_ns integer?  预览 diff 高亮/虚拟文本用的 namespace
+---@field preview_bufs table<integer, true>?  已打过预览 diff 的 buffer 集合，切换/关闭时逐个清 extmark
 ---@field last_status { text: string, is_error?: boolean }?  最近一次正式 status，供 flash 还原
 ---@field last_json any[]?  上次完整的 rg json 数组，供 replace 复用
 ---@field last_searched_inputs table<string, string>?  最近一次实际跑搜索（写 last_json）所用的输入快照，供 replace 判新鲜
@@ -237,6 +239,7 @@ end
 function M.close()
   local ctx = M.current
   if not ctx then return end
+  Inputs.record_all(ctx)
   ctx.state.closed = true
   if ctx.state.rg_abort then pcall(ctx.state.rg_abort) end
   if ctx.state.search_timer then
@@ -252,13 +255,8 @@ function M.close()
     pcall(vim.api.nvim_buf_clear_namespace, ctx.source_buf, ctx.namespace, 0, -1)
   end
 
-  -- 清除预览 diff 高亮
-  if ctx.state.preview_ns and vim.api.nvim_win_is_valid(ctx.prev_win) then
-    local prev_buf = vim.api.nvim_win_get_buf(ctx.prev_win)
-    if vim.api.nvim_buf_is_valid(prev_buf) then
-      pcall(vim.api.nvim_buf_clear_namespace, prev_buf, ctx.state.preview_ns, 0, -1)
-    end
-  end
+  -- 清除所有预览过的 buffer 上残留的 diff 高亮（不止当前 prev_win 的 buffer）
+  Actions._clear_all_preview_diff(ctx)
 
   pcall(vim.api.nvim_del_augroup_by_id, ctx.augroup)
   if vim.api.nvim_buf_is_valid(ctx.buf) then
@@ -273,6 +271,7 @@ end
 ---@param ctx VVReplaceCtx
 function M._on_buf_gone(ctx)
   if M.current == ctx then
+    pcall(Inputs.record_all, ctx)
     ctx.state.closed = true
     -- kill 运行中的 rg 进程
     if ctx.state.rg_abort then pcall(ctx.state.rg_abort) end
@@ -291,13 +290,8 @@ function M._on_buf_gone(ctx)
       pcall(vim.api.nvim_buf_clear_namespace, ctx.source_buf, ctx.namespace, 0, -1)
     end
 
-    -- 清除预览 diff 高亮
-    if ctx.state.preview_ns and vim.api.nvim_win_is_valid(ctx.prev_win) then
-      local prev_buf = vim.api.nvim_win_get_buf(ctx.prev_win)
-      if vim.api.nvim_buf_is_valid(prev_buf) then
-        pcall(vim.api.nvim_buf_clear_namespace, prev_buf, ctx.state.preview_ns, 0, -1)
-      end
-    end
+    -- 清除所有预览过的 buffer 上残留的 diff 高亮（不止当前 prev_win 的 buffer）
+    Actions._clear_all_preview_diff(ctx)
 
     -- 清理 augroup
     pcall(vim.api.nvim_del_augroup_by_id, ctx.augroup)

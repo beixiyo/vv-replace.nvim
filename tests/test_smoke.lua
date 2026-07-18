@@ -9,6 +9,8 @@
 local passed = 0
 local failed = 0
 
+package.path = './lua/?.lua;./lua/?/init.lua;' .. package.path
+
 ---@param name string
 ---@param fn fun()
 local function test(name, fn)
@@ -73,26 +75,25 @@ end)
 test('values.replace=nil 时不添加 --replace 参数', function()
   local args = {}
   local values = { replace = nil }
-  if values.replace ~= nil then
+  if values.replace ~= nil and values.replace ~= '' then
     args[#args + 1] = '--replace=' .. values.replace
   end
   assert_eq(#args, 0, 'nil replace should not add --replace')
 end)
 
-test('values.replace="" 时添加 --replace= 参数', function()
+test('values.replace="" 时不添加 --replace 参数（空替换走普通高亮，删除由 replace.lua 兜底）', function()
   local args = {}
   local values = { replace = '' }
-  if values.replace ~= nil then
+  if values.replace ~= nil and values.replace ~= '' then
     args[#args + 1] = '--replace=' .. values.replace
   end
-  assert_eq(#args, 1, 'empty replace should add --replace')
-  assert_eq(args[1], '--replace=', 'empty replace arg')
+  assert_eq(#args, 0, 'empty replace should not add --replace')
 end)
 
 test('values.replace="foo" 时添加 --replace=foo 参数', function()
   local args = {}
   local values = { replace = 'foo' }
-  if values.replace ~= nil then
+  if values.replace ~= nil and values.replace ~= '' then
     args[#args + 1] = '--replace=' .. values.replace
   end
   assert_eq(#args, 1, 'normal replace should add --replace')

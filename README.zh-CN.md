@@ -25,7 +25,7 @@
 |------|------|
 | [Neovim ≥ 0.10](https://github.com/neovim/neovim) | `vim.system`、extmark `invalid`、`vim.fs.normalize` |
 | [ripgrep ≥ 13](https://github.com/BurntSushi/ripgrep) | 搜索引擎，使用 `--json` 流式输出 + `--replace` 计算替换结果 |
-| [vv-utils.nvim](https://github.com/beixiyo/vv-utils.nvim) | 共享工具库（fs、help_panel、ui_window） |
+| [vv-utils.nvim](https://github.com/beixiyo/vv-utils.nvim) | 共享工具库（fs、history、help_panel、ui_window） |
 
 ## 为什么要这个插件
 
@@ -55,9 +55,12 @@
     context_lines = 0,             -- rg --context=N（0 关闭）
     default_mode = 'plainText',    -- 'plainText' | 'regex'
     rg_extra_args = {},            -- 追加给 rg 的额外参数
+    history_persist = true,         -- 跨 Neovim 重启保留输入历史
     keymaps = {
       next_input  = '<Tab>',       -- 下一个输入框
       toggle_mode = '<S-Tab>',     -- 切换模式 plainText ↔ regex
+      history_prev = '<Up>',       -- 当前输入框的更早历史
+      history_next = '<Down>',     -- 当前输入框的更新历史
       replace_all = '<localleader>r', -- 替换全部（带确认）
       goto_match  = '<CR>',        -- 跳转到源文件对应行
       next_match  = '<C-n>',       -- 跳到下一个匹配（normal + insert）
@@ -91,6 +94,7 @@
 | `context_lines` | `integer` | `0` | `rg --context=N`，0 = 关闭 |
 | `default_mode` | `'plainText' \| 'regex'` | `'plainText'` | 默认搜索模式 |
 | `rg_extra_args` | `string[]` | `{}` | 追加给所有 rg 调用的额外参数（如 `{ '--hidden' }`） |
+| `history_persist` | `boolean` | `true` | 把各字段最近 50 条历史写入 `stdpath('state')/vv-replace/history.json`；设为 `false` 仅在当前会话保留 |
 | `keymaps` | `VVReplaceKeymaps` | *见上方* | 面板内键位，可逐项覆盖 |
 | `icons` | `VVReplaceIcons` | *见上方* | NerdFont 图标；非 NerdFont 用户可改 ASCII |
 
@@ -106,4 +110,4 @@
 | `<leader>sR`（visual） | `open_visual({ use='query' })`：选区作搜索词，工作区替换 |
 | `<leader>sv`（visual） | `open_visual({ scope='file', use='range' })`：仅在选中行内查找替换 |
 
-面板内 `<C-n>` / `<C-p>` 跳到下一个 / 上一个匹配（normal 与 insert 均可），光标移动时自动预览源文件
+面板内 `<Up>` / `<Down>` 按字段回溯输入历史。历史默认写入 Neovim state 目录，关闭面板或重启 Neovim 后仍可继续回溯；不会写入项目或 dotfiles。`<C-n>` / `<C-p>` 跳到下一个 / 上一个匹配（normal 与 insert 均可），光标移动时自动预览源文件

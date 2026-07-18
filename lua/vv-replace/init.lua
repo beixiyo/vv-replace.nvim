@@ -2,6 +2,7 @@
 --
 -- 设计目标：
 --   * 简洁可预测：两个主输入框 Search / Replace，Tab 循环切换
+--   * 输入历史：Up / Down 按字段回溯，默认持久化并跨 Neovim 重启保留
 --   * 模式显式：Shift-Tab 在 plainText / regex 之间切换，默认 plainText
 --   * smart case：搜索词含大写自动 -s，否则 -i（VSCode 同款）
 --   * 字段按 scope 动态显示：项目级 5 字段，文件级 2 字段
@@ -35,6 +36,7 @@ local M = {}
 ---@field context_lines integer  每个匹配上下文行数（0 = 关闭） @default 0
 ---@field default_mode 'plainText'|'regex' @default 'plainText'
 ---@field rg_extra_args string[]  追加给所有 rg 调用的额外参数 @default {}
+---@field history_persist boolean  跨 Neovim 重启持久化输入历史 @default true
 ---@field keymaps VVReplaceKeymaps
 ---@field icons VVReplaceIcons
 local defaults = {
@@ -45,9 +47,12 @@ local defaults = {
   context_lines = 0,
   default_mode = 'plainText',
   rg_extra_args = {},
+  history_persist = true,
   keymaps = {
     next_input = '<Tab>',
     toggle_mode = '<S-Tab>',       -- 按用户要求：S-Tab 用来切模式（见 actions.lua）
+    history_prev = '<Up>',         -- 当前输入框的更早历史（normal + insert）
+    history_next = '<Down>',       -- 当前输入框的更新历史（normal + insert）
     toggle_hidden     = { '.', '<M-h>' },  -- yazi 风：显隐隐藏文件（dotfile/.env 等）。Alt 键 insert 模式也生效
     toggle_gitignored = { 'I', '<M-i>' },  -- yazi 风：显隐 .gitignore 忽略文件。Alt 键 insert 模式也生效
     replace_all = '<localleader>r',
@@ -77,6 +82,8 @@ local defaults = {
 ---@class VVReplaceKeymaps
 ---@field next_input string  Tab：下一个输入框 @default '<Tab>'
 ---@field toggle_mode string  Shift-Tab：切换模式 plainText ↔ regex @default '<S-Tab>'
+---@field history_prev string  当前输入框的更早历史（normal + insert） @default '<Up>'
+---@field history_next string  当前输入框的更新历史（normal + insert） @default '<Down>'
 ---@field toggle_hidden string|string[]  切换显隐隐藏文件（dotfile/.env），yazi 风 @default { '.', '<M-h>' }
 ---@field toggle_gitignored string|string[]  切换显隐 .gitignore 忽略文件，yazi 风 @default { 'I', '<M-i>' }
 ---@field replace_all string @default '<localleader>r'
@@ -106,6 +113,7 @@ local config = defaults
 ---@param opts? table
 function M.setup(opts)
   config = vim.tbl_deep_extend('force', defaults, opts or {})
+  require('vv-replace.inputs').setup_history({ persist = config.history_persist })
   require('vv-replace.highlight').setup()
 
   vim.api.nvim_create_user_command('VVReplace', function(args)

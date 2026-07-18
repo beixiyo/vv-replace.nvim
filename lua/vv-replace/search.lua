@@ -95,7 +95,13 @@ local function build_rg_args(ctx, values)
   -- 删除匹配仍可工作：compute_new_content 在 submatch 无 replacement 时 rep 默认 ''（即删除），
   -- 且删除受 replace_all 的「Delete all matches?」确认保护，不会误删
   if values.replace ~= nil and values.replace ~= '' then
-    args[#args + 1] = '--replace=' .. values.replace
+    local replace = values.replace
+    -- plainText（--fixed-strings）只作用于搜索侧；替换侧 rg 仍会把 $name/$1 当捕获组引用，
+    -- 需把 $ 转义为 $$ 才能得到字面 $（regex 模式保留原样以支持 $1 等反向引用）
+    if ctx.mode == 'plainText' then
+      replace = replace:gsub('%$', '$$')
+    end
+    args[#args + 1] = '--replace=' .. replace
   end
 
   -- 搜索词（必须在位置参数之前，用 -e 避免首字符 `-` 被误认 flag）

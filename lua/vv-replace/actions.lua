@@ -3,6 +3,7 @@
 -- 键位设计（可在 config.keymaps 覆盖）：
 --   <Tab>     (n+i) 下一个输入框（Search ↔ Replace [↔ Include ↔ Exclude ↔ Cwd]）
 --   <S-Tab>   (n+i) 切换模式 plainText ↔ regex
+--   <Up>/<Down> (n+i) 当前输入框的更早/更新历史
 --   <C-g>     (n+i) 静音（屏蔽 vim 默认 file-info）
 --   <CR>      (n)   结果行 → 跳到源文件
 --   <C-n>/<C-p> (n+i) 跳到下一个/上一个匹配（光标移到匹配行，CursorMoved 自动预览源文件）
@@ -64,12 +65,16 @@ local function goto_match_under_cursor(ctx)
   if mark.kind == 'file' then
     -- 文件 header 行：跳文件开头
     focus_prev_win(ctx)
+    local prev_buf = vim.api.nvim_get_current_buf()
     vim.cmd('edit ' .. vim.fn.fnameescape(mark.filename))
+    require('vv-utils.bufdelete').wipe_if_throwaway(prev_buf)
     return
   end
   if mark.kind ~= 'match' then return end
   focus_prev_win(ctx)
+  local prev_buf = vim.api.nvim_get_current_buf()
   vim.cmd('edit ' .. vim.fn.fnameescape(mark.filename))
+  require('vv-utils.bufdelete').wipe_if_throwaway(prev_buf)
   pcall(vim.api.nvim_win_set_cursor, 0, { mark.lnum or 1, (mark.col or 1) - 1 })
   vim.cmd('normal! zz')
 end
@@ -122,6 +127,8 @@ local function show_help(ctx)
   local actions = {
     ['cycle next input (Search/Replace/...)'] = { cat = 'Navigate', icon = ic.next_input },
     ['toggle search mode (plainText ↔ regex)'] = { cat = 'Navigate', icon = ic.toggle_mode },
+    ['recall previous input']                 = { cat = 'Navigate', icon = ic.prev_match },
+    ['recall next input']                     = { cat = 'Navigate', icon = ic.next_match },
     ['jump to match under cursor']            = { cat = 'Navigate', icon = ic.goto_match },
     ['jump to next match']                    = { cat = 'Navigate', icon = ic.next_match },
     ['jump to previous match']                = { cat = 'Navigate', icon = ic.prev_match },
@@ -169,6 +176,17 @@ function M.attach(ctx)
     -- mode 变了但 inputs 字段没变 → on_change 会误判"没变"跳过搜索；直接 search_now
     Search.search_now(ctx)
   end, 'vv-replace: toggle search mode (plainText ↔ regex)')
+
+  -- 输入行用 Up/Down 浏览该字段历史；结果区仍执行 Neovim 原生上下移动
+  local function navigate_history(direction, fallback)
+    return function()
+      if Inputs.navigate_history(ctx, direction) then return end
+      local keys = vim.api.nvim_replace_termcodes(fallback, true, false, true)
+      vim.api.nvim_feedkeys(keys, 'n', false)
+    end
+  end
+  map(buf, { 'n', 'i' }, km.history_prev, navigate_history(-1, '<Up>'), 'vv-replace: recall previous input')
+  map(buf, { 'n', 'i' }, km.history_next, navigate_history(1, '<Down>'), 'vv-replace: recall next input')
 
   -- 搜索范围切换（yazi/vv-explorer 风），仅 project scope（file scope 锁定单文件、显式路径无视忽略规则）：
   --   . / <M-h>  显隐隐藏文件；I / <M-i>  显隐 .gitignore 忽略文件
@@ -301,7 +319,7 @@ function M.attach(ctx)
       local mark = Render.mark_at_cursor(ctx)
 
       if not mark then
-        M._clear_preview_diff(ctx.prev_win, preview_ns)
+        M._clear_all_preview_diff(ctx)
         last_preview.filename = nil
         last_preview.lnum = nil
         return
@@ -319,10 +337,18 @@ function M.attach(ctx)
       last_preview.filename = filename
       last_preview.lnum = lnum
 
+      -- 切换预览文件前，先清掉之前所有预览过的 buffer 的 diff extmark，
+      -- 否则 A→B→C 后 A、B 的 buffer 会永久残留 inline 虚拟文本（形似未保存改动）
+      if file_changed then
+        M._clear_all_preview_diff(ctx)
+      end
+
+      local displaced_buf = nil
       vim.api.nvim_win_call(ctx.prev_win, function()
         if file_changed then
           local cur_name = vim.api.nvim_buf_get_name(0)
           if vim.fs.normalize(cur_name) ~= vim.fs.normalize(filename) then
+            displaced_buf = vim.api.nvim_get_current_buf()
             vim.cmd('edit ' .. vim.fn.fnameescape(filename))
           end
         end
@@ -330,6 +356,11 @@ function M.attach(ctx)
         pcall(vim.api.nvim_win_set_cursor, 0, { lnum, (mark.col or 1) - 1 })
         vim.cmd('normal! zz')
       end)
+
+      -- 被 :edit 置换掉的空 [No Name] startup buffer 顺手清理，避免污染 :ls/bufferline
+      if displaced_buf then
+        require('vv-utils.bufdelete').wipe_if_throwaway(displaced_buf)
+      end
 
       if file_changed then
         M._apply_file_diff(ctx, filename, preview_ns)
@@ -353,15 +384,18 @@ function M.attach(ctx)
   end
 end
 
----@param win integer
----@param ns integer
-function M._clear_preview_diff(win, ns)
-  if not vim.api.nvim_win_is_valid(win) then return end
-
-  local prev_buf = vim.api.nvim_win_get_buf(win)
-  if vim.api.nvim_buf_is_valid(prev_buf) then
-    pcall(vim.api.nvim_buf_clear_namespace, prev_buf, ns, 0, -1)
+-- 清掉所有预览过（打过 diff）的 buffer 上残留的预览 extmark，并重置记录。
+-- 用于切换预览文件 / 光标离开匹配 / 关闭面板，避免旧文件 buffer 残留 inline 虚拟文本。
+---@param ctx VVReplaceCtx
+function M._clear_all_preview_diff(ctx)
+  local ns = ctx.state.preview_ns
+  if not ns then return end
+  for b in pairs(ctx.state.preview_bufs or {}) do
+    if vim.api.nvim_buf_is_valid(b) then
+      pcall(vim.api.nvim_buf_clear_namespace, b, ns, 0, -1)
+    end
   end
+  ctx.state.preview_bufs = {}
 end
 
 ---@param ctx VVReplaceCtx
@@ -374,6 +408,9 @@ function M._apply_file_diff(ctx, filename, ns)
   if not vim.api.nvim_buf_is_valid(prev_buf) then return end
 
   pcall(vim.api.nvim_buf_clear_namespace, prev_buf, ns, 0, -1)
+  -- 记录被打过 diff 的 buffer，供切换/关闭时统一清理，避免 extmark 残留
+  ctx.state.preview_bufs = ctx.state.preview_bufs or {}
+  ctx.state.preview_bufs[prev_buf] = true
 
   -- 收集同文件所有 match marks
   local file_marks = {}

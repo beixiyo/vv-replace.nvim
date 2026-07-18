@@ -26,7 +26,7 @@ Want my Neovim config? See <a href="https://github.com/beixiyo/dotfiles">dotfile
 |---|---|
 | [Neovim 0.10+](https://github.com/neovim/neovim) | `vim.system`, invalidating extmarks, and `vim.fs.normalize` |
 | [ripgrep 13+](https://github.com/BurntSushi/ripgrep) | Search engine using streamed `--json` output and `--replace` to calculate replacements |
-| [vv-utils.nvim](https://github.com/beixiyo/vv-utils.nvim) | Shared filesystem, help-panel, and UI-window utilities |
+| [vv-utils.nvim](https://github.com/beixiyo/vv-utils.nvim) | Shared filesystem, input-history, help-panel, and UI-window utilities |
 
 ## Why this plugin
 
@@ -56,9 +56,12 @@ Want my Neovim config? See <a href="https://github.com/beixiyo/dotfiles">dotfile
     context_lines = 0,
     default_mode = 'plainText',
     rg_extra_args = {},
+    history_persist = true,
     keymaps = {
       next_input = '<Tab>',
       toggle_mode = '<S-Tab>',
+      history_prev = '<Up>',
+      history_next = '<Down>',
       replace_all = '<localleader>r',
       goto_match = '<CR>',
       next_match = '<C-n>',
@@ -85,6 +88,7 @@ Want my Neovim config? See <a href="https://github.com/beixiyo/dotfiles">dotfile
 | `context_lines` | `integer` | `0` | `rg --context=N`; zero disables context |
 | `default_mode` | `'plainText' \| 'regex'` | `'plainText'` | Initial search mode |
 | `rg_extra_args` | `string[]` | `{}` | Extra arguments for every ripgrep invocation |
+| `history_persist` | `boolean` | `true` | Store the latest 50 entries per field in `stdpath('state')/vv-replace/history.json`; set to `false` for session-only history |
 | `keymaps` | `VVReplaceKeymaps` | See above | Overridable panel mappings |
 | `icons` | `VVReplaceIcons` | See above | Nerd Font icons; ASCII is also supported |
 
@@ -100,4 +104,4 @@ For Visual mode, wrap `open_visual({ scope?, use })`: `use='query'` uses the sel
 | `<leader>sR` in Visual mode | `open_visual({ use='query' })` |
 | `<leader>sv` in Visual mode | `open_visual({ scope='file', use='range' })` |
 
-Inside the panel, `<C-n>` and `<C-p>` move between matches in Normal and Insert mode. Moving the cursor automatically previews the source file.
+Inside the panel, `<Up>` and `<Down>` recall per-field input history. History is stored under Neovim's state directory by default, so it remains available after reopening the panel or restarting Neovim without touching the project or dotfiles. `<C-n>` and `<C-p>` move between matches in Normal and Insert mode. Moving the cursor automatically previews the source file.

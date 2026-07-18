@@ -10,7 +10,35 @@
 --       - file 模式（<leader>sr）：Search + Replace（锁定单文件，无需 glob 筛选）
 --       - project 模式（<leader>sR）：Search + Replace + Include + Exclude + Cwd 全部默认显示
 
+local History = require('vv-utils.history')
+
 local M = {}
+
+---@type vv-utils.history.History?
+local history
+local history_persist = false
+
+---@return vv-utils.history.History
+local function get_history()
+  if not history then
+    history = History.new({ name = 'vv-replace' })
+    history_persist = false
+  end
+  return history
+end
+
+---配置当前插件使用的通用历史实例
+---@param opts { persist: boolean }
+function M.setup_history(opts)
+  if history and history_persist == opts.persist then return end
+
+  history = History.new({
+    name = 'vv-replace',
+    max_entries = 50,
+    persist = opts.persist,
+  })
+  history_persist = opts.persist
+end
 
 -- 模式显示：图标 + 英文标签。图标从 ctx.config.icons 注入，避免硬依赖 vv-icons
 ---@param ctx VVReplaceCtx
@@ -222,6 +250,51 @@ function M.get_values(ctx)
   return values
 end
 
+---记录当前光标所在输入框的值
+---@param ctx VVReplaceCtx
+function M.record_current(ctx)
+  local row = vim.api.nvim_win_get_cursor(ctx.win)[1] - 1
+  local name = M.field_at_row(ctx, row)
+  local value = name and M.get_value(ctx, name) or ''
+  if name then get_history():record(name, value) end
+end
+
+---记录全部可见输入框，供关闭面板时跨会话回溯
+---@param ctx VVReplaceCtx
+function M.record_all(ctx)
+  local records = {}
+  for _, field in ipairs(M.visible_fields(ctx)) do
+    records[#records + 1] = {
+      field = field.name,
+      value = M.get_value(ctx, field.name),
+    }
+  end
+  get_history():record_many(records)
+end
+
+---在当前输入框浏览历史。光标不在输入框时返回 false，让调用方保留原按键行为
+---@param ctx VVReplaceCtx
+---@param direction 1|-1
+---@return boolean handled
+function M.navigate_history(ctx, direction)
+  local row = vim.api.nvim_win_get_cursor(ctx.win)[1] - 1
+  local name = M.field_at_row(ctx, row)
+  if not name then return false end
+
+  local current = M.get_value(ctx, name)
+  local value = direction < 0
+    and get_history():previous(name, current)
+    or get_history():next(name, current)
+  if value == nil then return true end
+
+  local line = vim.api.nvim_buf_get_lines(ctx.buf, row, row + 1, false)[1] or ''
+  vim.bo[ctx.buf].modifiable = true
+  vim.api.nvim_buf_set_text(ctx.buf, row, 0, row, #line, { value })
+  pcall(vim.api.nvim_win_set_cursor, ctx.win, { row + 1, #value })
+
+  return true
+end
+
 -- 填充初始值。render 必须已调用过
 -- 用 set_text 而非 set_lines：set_lines 会把同文件相邻字段的 left-gravity extmark
 -- 连带 virt_lines_above 一起向上挤（Neovim 内部把 virt_line 视作 extmark 的前缀）
@@ -256,6 +329,7 @@ function M.goto_sibling(ctx, direction)
   local current_name = M.field_at_row(ctx, cursor_row)
   local idx = 1
   if current_name then
+    M.record_current(ctx)
     for i, f in ipairs(fields) do
       if f.name == current_name then idx = i break end
     end
