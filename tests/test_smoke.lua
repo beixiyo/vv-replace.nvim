@@ -108,17 +108,6 @@ test('has_replace: nil → false, "" → true, "x" → true', function()
 end)
 
 -- ============================================================
--- FIX 4: README max_results 默认值
--- ============================================================
-print('\n[FIX 4] max_results 默认值测试')
-
-test('默认 max_results 应为 10000', function()
-  -- 模拟 defaults 表
-  local defaults = { max_results = 10000 }
-  assert_eq(defaults.max_results, 10000, 'max_results default')
-end)
-
--- ============================================================
 -- 汇总
 -- ============================================================
 print(string.format('\n总计: %d passed, %d failed', passed, failed))
