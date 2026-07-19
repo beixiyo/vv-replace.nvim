@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 - 2026-07-19
+
+- 适配 `vv-utils.fs` 领域入口，批量替换事务统一通过 `fs.new_transaction()` 创建，不再依赖已删除的 `vv-utils.fs_transaction`
+
 ## 0.3.0 - 2026-07-19
 
 - 新增 `vv-replace.blink` 路径 source；宿主可让 Blink 在 Search / Replace 补全已加载 buffer 的词，在 Include / Exclude / Cwd 补全路径

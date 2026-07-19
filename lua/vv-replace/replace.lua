@@ -10,7 +10,7 @@ local Inputs = require('vv-replace.inputs')
 local Search = require('vv-replace.search')
 local Render = require('vv-replace.render')
 local fs = require('vv-utils.fs')
-local transaction = require('vv-utils.fs_transaction').new()
+local transaction = fs.new_transaction()
 
 local M = {}
 
@@ -150,7 +150,7 @@ function M.replace_all(ctx, researched)
   vim.bo[ctx.buf].modifiable = false
   Render.render_status(ctx, 'Preparing replacement')
 
-  ---@type VVUtilsFileTransactionEntry[]
+  ---@type vv-utils.fs.TransactionEntry[]
   local entries = {}
   for _, file in ipairs(files) do
     local ok_read, old = pcall(fs.read_all, file)
