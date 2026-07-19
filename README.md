@@ -45,7 +45,7 @@ Want my Neovim config? See <a href="https://github.com/beixiyo/dotfiles">dotfile
 {
   'beixiyo/vv-replace.nvim',
   dependencies = { 'beixiyo/vv-utils.nvim' },
-  cmd = { 'VVReplace', 'VVReplaceFile', 'VVReplaceClose', 'VVReplaceToggle' },
+  cmd = { 'VVReplace', 'VVReplaceFile', 'VVReplaceClose', 'VVReplaceToggle', 'VVReplaceUndo' },
   keys = { '<leader>sR', '<leader>sr' },
   ---@type VVReplaceConfig
   opts = {
@@ -63,6 +63,7 @@ Want my Neovim config? See <a href="https://github.com/beixiyo/dotfiles">dotfile
       history_prev = '<Up>',
       history_next = '<Down>',
       replace_all = '<localleader>r',
+      undo_last = '<localleader>u',
       goto_match = '<CR>',
       next_match = '<C-n>',
       prev_match = '<C-p>',
@@ -71,7 +72,7 @@ Want my Neovim config? See <a href="https://github.com/beixiyo/dotfiles">dotfile
     },
     icons = {
       plain = '󰊄', regex = '', next_input = '󰁔', toggle_mode = '󰁨',
-      goto_match = '', replace_all = '', close = '', help = '󰌌', title = '',
+      goto_match = '', replace_all = '', undo_last = '', close = '', help = '󰌌', title = '',
     },
   },
 }
@@ -103,5 +104,9 @@ For Visual mode, wrap `open_visual({ scope?, use })`: `use='query'` uses the sel
 | `<leader>sr` in Visual mode | `open_visual({ scope='file', use='query' })` |
 | `<leader>sR` in Visual mode | `open_visual({ use='query' })` |
 | `<leader>sv` in Visual mode | `open_visual({ scope='file', use='range' })` |
+
+Include and Exclude accept comma-separated VS Code-style search globs. `core/src` matches that path at any depth, while `./packages/core/src/` is anchored to Cwd. Each shorthand matches both the path itself and its descendants. Brace globs such as `*.{ts,tsx}`, character classes, escaped commas, and paths containing spaces are preserved. Use Cwd instead of `../` or absolute paths.
+
+The Replace label shows the effective mapping on its right: normally `\r Apply`, then `\u Undo  \r Apply` after a successful replacement, and back to Apply after undo. You can also run `:VVReplaceUndo` outside the panel. Undo aborts without writing if a file changed externally or a related buffer has unsaved changes. The undo snapshot lasts for the current Neovim session
 
 Inside the panel, `<Up>` and `<Down>` recall per-field input history. History is stored under Neovim's state directory by default, so it remains available after reopening the panel or restarting Neovim without touching the project or dotfiles. `<C-n>` and `<C-p>` move between matches in Normal and Insert mode. Moving the cursor automatically previews the source file.

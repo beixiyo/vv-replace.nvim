@@ -25,6 +25,7 @@
 --   :'<,'>VVReplaceFile    — 当前文件 + 仅替换选区行（等价 V 模式按 <leader>sv）
 --   :VVReplaceClose
 --   :VVReplaceToggle
+--   :VVReplaceUndo
 
 local M = {}
 
@@ -56,6 +57,7 @@ local defaults = {
     toggle_hidden     = { '.', '<M-h>' },  -- yazi 风：显隐隐藏文件（dotfile/.env 等）。Alt 键 insert 模式也生效
     toggle_gitignored = { 'I', '<M-i>' },  -- yazi 风：显隐 .gitignore 忽略文件。Alt 键 insert 模式也生效
     replace_all = '<localleader>r',
+    undo_last = '<localleader>u',
     goto_match = '<CR>',
     next_match = '<C-n>',          -- 跳下一个匹配（normal + insert）
     prev_match = '<C-p>',          -- 跳上一个匹配（normal + insert）
@@ -73,6 +75,7 @@ local defaults = {
     next_match  = '↓',   -- help: Navigate / next match
     prev_match  = '↑',   -- help: Navigate / prev match
     replace_all = '',  -- help: Replace / replace all
+    undo_last   = '󰕌',  -- help: Replace / undo
     close       = '',    -- help: Panel / close
     help        = '󰌌',     -- help: Panel / help
     title       = '',  -- help panel 标题图标
@@ -87,6 +90,7 @@ local defaults = {
 ---@field toggle_hidden string|string[]  切换显隐隐藏文件（dotfile/.env），yazi 风 @default { '.', '<M-h>' }
 ---@field toggle_gitignored string|string[]  切换显隐 .gitignore 忽略文件，yazi 风 @default { 'I', '<M-i>' }
 ---@field replace_all string @default '<localleader>r'
+---@field undo_last string @default '<localleader>u'
 ---@field goto_match string  回车：跳到光标处匹配 @default '<CR>'
 ---@field next_match string  跳到下一个匹配（normal + insert 都生效） @default '<C-n>'
 ---@field prev_match string  跳到上一个匹配（normal + insert 都生效） @default '<C-p>'
@@ -104,6 +108,7 @@ local defaults = {
 ---@field next_match string   help 浮窗图标（下一个匹配） @default '↓'
 ---@field prev_match string   help 浮窗图标（上一个匹配） @default '↑'
 ---@field replace_all string  help 浮窗图标 @default ''
+---@field undo_last string  help 浮窗图标 @default ''
 ---@field close string        help 浮窗图标 @default ''
 ---@field help string         help 浮窗图标 @default '󰌌'
 ---@field title string        help 浮窗标题图标 @default ''
@@ -131,6 +136,9 @@ function M.setup(opts)
 
   vim.api.nvim_create_user_command('VVReplaceClose', function() M.close() end, {})
   vim.api.nvim_create_user_command('VVReplaceToggle', function() M.toggle() end, {})
+  vim.api.nvim_create_user_command('VVReplaceUndo', function() M.undo_last() end, {
+    desc = '撤回最近一次 vv-replace 批量替换',
+  })
 end
 
 ---@param opts? { scope?: 'project'|'file', cwd?: string, query?: string, range?: integer[] }
@@ -171,6 +179,11 @@ end
 
 function M.close()
   require('vv-replace.buffer').close()
+end
+
+function M.undo_last()
+  local buffer = require('vv-replace.buffer')
+  require('vv-replace.replace').undo_last(buffer.current)
 end
 
 ---@param opts? { scope?: 'project'|'file', cwd?: string, query?: string, range?: integer[] }

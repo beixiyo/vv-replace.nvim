@@ -32,6 +32,7 @@ M.FILETYPE = 'vv-replace'
 ---@field target_range integer[]?  scope='file' 时的 1-based 行范围 { start, end }，限制 match/replace 的生效行
 ---@field source_buf integer?  range 生效时，源 buffer（用于高亮 + 关闭时清除）
 ---@field config VVReplaceConfig
+---@field keymap_labels { replace_all: string, undo_last: string }
 ---@field state VVReplaceState
 
 ---@class VVReplaceState
@@ -138,6 +139,10 @@ local function build_ctx(config, opts)
     target_range = target_range,
     source_buf = source_buf,
     config = config,
+    keymap_labels = {
+      replace_all = Inputs.display_key(config.keymaps.replace_all),
+      undo_last = Inputs.display_key(config.keymaps.undo_last),
+    },
     state = {
       result_marks = {},
       result_extmark_ids = {},
@@ -171,6 +176,14 @@ local function attach_autocmds(ctx)
     buffer = buf,
     callback = function()
       M._on_buf_gone(ctx)
+    end,
+  })
+
+  vim.api.nvim_create_autocmd('WinResized', {
+    group = group,
+    callback = function()
+      if ctx.state.closed or not vim.api.nvim_win_is_valid(ctx.win) then return end
+      Inputs.render(ctx)
     end,
   })
 

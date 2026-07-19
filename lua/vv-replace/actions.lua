@@ -8,6 +8,7 @@
 --   <CR>      (n)   结果行 → 跳到源文件
 --   <C-n>/<C-p> (n+i) 跳到下一个/上一个匹配（光标移到匹配行，CursorMoved 自动预览源文件）
 --   <localleader>r  (n) 替换全部（带确认）
+--   <localleader>u  (n) 撤回最近一次成功的批量替换
 --   q         (n)   关闭
 --   g?        (n)   帮助
 
@@ -129,10 +130,12 @@ local function show_help(ctx)
     ['toggle search mode (plainText ↔ regex)'] = { cat = 'Navigate', icon = ic.toggle_mode },
     ['recall previous input']                 = { cat = 'Navigate', icon = ic.prev_match },
     ['recall next input']                     = { cat = 'Navigate', icon = ic.next_match },
+    ['clear current input']                   = { cat = 'Navigate' },
     ['jump to match under cursor']            = { cat = 'Navigate', icon = ic.goto_match },
     ['jump to next match']                    = { cat = 'Navigate', icon = ic.next_match },
     ['jump to previous match']                = { cat = 'Navigate', icon = ic.prev_match },
     ['replace all matches (with confirm)']    = { cat = 'Replace',  icon = ic.replace_all },
+    ['undo last replacement']                 = { cat = 'Replace',  icon = ic.undo_last },
     ['close panel']                           = { cat = 'Panel',    icon = ic.close },
     ['show this help']                        = { cat = 'Panel',    icon = ic.help },
   }
@@ -229,6 +232,10 @@ function M.attach(ctx)
     Replace.replace_all(ctx)
   end, 'vv-replace: replace all matches (with confirm)')
 
+  map(buf, 'n', km.undo_last, function()
+    Replace.undo_last(ctx)
+  end, 'vv-replace: undo last replacement')
+
   map(buf, 'n', km.close, function()
     require('vv-replace.buffer').close()
   end, 'vv-replace: close panel')
@@ -250,6 +257,12 @@ function M.attach(ctx)
     end
     -- 在输入区外（极少见）也不插换行：避免布局失控
   end, { buffer = buf, silent = true })
+
+  -- dd 在输入表单中表示清空当前字段，不能真的删掉整行；
+  -- 否则后续字段和结果 header 会上移，extmark 无法再区分它们的语义
+  vim.keymap.set('n', 'dd', function()
+    Inputs.clear_current(ctx)
+  end, { buffer = buf, silent = true, desc = 'vv-replace: clear current input' })
 
   -- 静音 vim 自带的 <C-g> file-info —— UI buffer 显示 "vv-replace://N 3 lines" 是噪音
   vim.keymap.set({ 'n', 'i' }, '<C-g>', '<Nop>', { buffer = buf, silent = true })

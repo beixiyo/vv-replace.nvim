@@ -9,6 +9,8 @@
 --     row header + 3 → 空行
 --     row header + 4 → <下个文件路径> ...
 
+local Path = require('vv-utils.path')
+
 local M = {}
 
 ---@class VVReplaceResultMark
@@ -50,11 +52,21 @@ local function get_header_row(ctx)
   return require('vv-replace.inputs').results_header_row(ctx)
 end
 
+---@param path string
+---@return boolean
+local function is_absolute_path(path)
+  return path:sub(1, 1) == '/'
+    or path:match('^%a:[/\\]') ~= nil
+    or path:match('^[/\\][/\\]') ~= nil
+end
+
 -- 根据 rg 的 --json 流结果生成渲染数据
 ---@param json_matches any[]  rg NDJSON 解析后对象数组
 ---@param has_replace boolean
+---@param opts? { root?: string }
 ---@return VVReplaceParsed
-function M.parse_results(json_matches, has_replace)
+function M.parse_results(json_matches, has_replace, opts)
+  opts = opts or {}
   local lines = {}
   local marks = {}
   local highlights = {}
@@ -66,10 +78,16 @@ function M.parse_results(json_matches, has_replace)
     if obj.type == 'begin' then
       stats.files = stats.files + 1
       current_file = obj.data.path.text or obj.data.path.bytes or '?'
+      if opts.root and not is_absolute_path(current_file) then
+        current_file = vim.fs.joinpath(opts.root, current_file)
+      end
       current_file = vim.fs.normalize(current_file)
 
+      local display_path = opts.root and vim.fs.relpath(opts.root, current_file) or nil
+      display_path = Path.collapse_middle(display_path or current_file, { head = 1, tail = 3 })
+
       local header_row = #lines
-      lines[#lines + 1] = current_file
+      lines[#lines + 1] = display_path
 
       marks[#marks + 1] = {
         row = header_row,
@@ -80,7 +98,7 @@ function M.parse_results(json_matches, has_replace)
       highlights[#highlights + 1] = {
         row = header_row,
         col_start = 0,
-        col_end = #current_file,
+        col_end = #display_path,
         hl_group = 'VVReplaceFilePath',
       }
 
@@ -298,9 +316,10 @@ function M._paint_status(ctx, text, hl_group)
     pcall(vim.api.nvim_buf_del_extmark, buf, ctx.namespace, ctx.extmark_ids.status)
     ctx.extmark_ids.status = nil
   end
+
   if text == '' then return end
   ctx.extmark_ids.status = vim.api.nvim_buf_set_extmark(buf, ctx.namespace, header_row, 0, {
-    virt_text = { { '── ' .. text .. ' ──', hl_group or 'VVReplaceStatus' } },
+    virt_text = { { '── ' .. text:gsub('[\r\n]+', ' ') .. ' ──', hl_group or 'VVReplaceStatus' } },
     virt_text_pos = 'overlay',
     right_gravity = false,
   })

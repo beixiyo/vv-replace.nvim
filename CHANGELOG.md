@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 - 2026-07-19
+
+- Replace 标签右侧动态显示实际生效的 `Apply` / `Undo` 快捷键
+- 新增 `<localleader>u` / `:VVReplaceUndo`，可安全撤回最近一次批量替换
+- 批量替换改为事务式写入：统一预检，失败自动回滚，写入后读回校验
+- Include / Exclude 按顶层逗号切分，不再把 `*.{ts,tsx}` 等 brace glob 拆坏
+- Include / Exclude 复用 `vv-utils.glob` 支持 VS Code 风格简写：`core/src` 匹配任意深度，`./core/src/` 锚定 Cwd，并同时覆盖路径本体与目录后代
+- 输入框中的 `dd` 改为清空当前字段，不再删除表单行并将状态误当成 Cwd
+- 结果文件路径相对搜索 Cwd 显示，并复用 `vv-utils.path.collapse_middle()` 折叠中间层级；跳转仍保留完整路径
+
 ## [0.1.0] - 2026-07-13
 
 ### Added

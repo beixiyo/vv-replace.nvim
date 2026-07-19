@@ -44,7 +44,7 @@
 {
   'beixiyo/vv-replace.nvim',
   dependencies = { 'beixiyo/vv-utils.nvim' },
-  cmd = { 'VVReplace', 'VVReplaceFile', 'VVReplaceClose', 'VVReplaceToggle' },
+  cmd = { 'VVReplace', 'VVReplaceFile', 'VVReplaceClose', 'VVReplaceToggle', 'VVReplaceUndo' },
   keys = { '<leader>sR', '<leader>sr' },
   ---@type VVReplaceConfig
   opts = {
@@ -62,6 +62,7 @@
       history_prev = '<Up>',       -- 当前输入框的更早历史
       history_next = '<Down>',     -- 当前输入框的更新历史
       replace_all = '<localleader>r', -- 替换全部（带确认）
+      undo_last = '<localleader>u', -- 撤回最近一次成功的批量替换
       goto_match  = '<CR>',        -- 跳转到源文件对应行
       next_match  = '<C-n>',       -- 跳到下一个匹配（normal + insert）
       prev_match  = '<C-p>',       -- 跳到上一个匹配（normal + insert）
@@ -74,7 +75,7 @@
       next_input  = '󰁔',
       toggle_mode = '󰁨',
       goto_match  = '',
-      replace_all = '',
+      replace_all = '', undo_last = '',
       close       = '',
       help        = '󰌌',
       title       = '',
@@ -110,4 +111,8 @@
 | `<leader>sR`（visual） | `open_visual({ use='query' })`：选区作搜索词，工作区替换 |
 | `<leader>sv`（visual） | `open_visual({ scope='file', use='range' })`：仅在选中行内查找替换 |
 
+Include / Exclude 支持按顶层逗号分隔的 VS Code 风格搜索 glob。`core/src` 匹配任意深度的同名路径，`./packages/core/src/` 则锚定到 Cwd；每条简写同时匹配路径本体和目录后代。支持 `*.{ts,tsx}` brace glob、字符类、转义逗号和含空格路径。`../` 或绝对路径请改用 Cwd
+
 面板内 `<Up>` / `<Down>` 按字段回溯输入历史。历史默认写入 Neovim state 目录，关闭面板或重启 Neovim 后仍可继续回溯；不会写入项目或 dotfiles。`<C-n>` / `<C-p>` 跳到下一个 / 上一个匹配（normal 与 insert 均可），光标移动时自动预览源文件
+
+Replace 标签右侧会显示实际生效的替换键：平时为 `\r Apply`，替换成功后动态变为 `\u Undo  \r Apply`，撤回后恢复。也可在面板外执行 `:VVReplaceUndo`。撤回前会校验文件没有被外部修改且相关 buffer 没有未保存内容；有冲突时不会写入任何文件。撤回记录保留在当前 Neovim 会话中，重启后清空

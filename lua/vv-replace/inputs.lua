@@ -18,6 +18,42 @@ local M = {}
 local history
 local history_persist = false
 
+---@param lhs string
+---@return string
+function M.display_key(lhs)
+  local keys = vim.api.nvim_replace_termcodes(lhs, true, true, true)
+  return vim.fn.keytrans(keys)
+end
+
+---@param ctx VVReplaceCtx
+---@param label string
+---@param hints string[]  按信息完整度从高到低排列，窄窗口自动降级
+---@return table[]
+local function aligned_label(ctx, label, hints)
+  local text_width = vim.api.nvim_win_get_width(ctx.win)
+  local info = vim.fn.getwininfo(ctx.win)[1]
+  if info then text_width = text_width - (info.textoff or 0) end
+
+  local left = ' ' .. label
+  local hint
+  local gap
+  for _, candidate in ipairs(hints) do
+    local candidate_gap = text_width - vim.fn.strdisplaywidth(left) - vim.fn.strdisplaywidth(candidate)
+    if candidate_gap >= 2 then
+      hint = candidate
+      gap = candidate_gap
+      break
+    end
+  end
+  if not hint or not gap then return { { left, 'VVReplaceLabel' } } end
+
+  return {
+    { left, 'VVReplaceLabel' },
+    { string.rep(' ', gap), 'VVReplaceLabel' },
+    { hint, 'VVReplacePlaceholder' },
+  }
+end
+
 ---@return vv-utils.history.History
 local function get_history()
   if not history then
@@ -62,8 +98,8 @@ end
 M.FIELDS = {
   { name = 'search',  label = 'Search',  placeholder = 'Search pattern...',                scopes = { file = true, project = true } },
   { name = 'replace', label = 'Replace', placeholder = 'Replace (empty = delete matches)', scopes = { file = true, project = true }, notrim = true },
-  { name = 'include', label = 'Include', placeholder = 'e.g. *.lua, src/**',               scopes = { project = true } },
-  { name = 'exclude', label = 'Exclude', placeholder = 'e.g. *.log, test/**',              scopes = { project = true } },
+  { name = 'include', label = 'Include', placeholder = 'e.g. *.lua, core/src, ./src',       scopes = { project = true } },
+  { name = 'exclude', label = 'Exclude', placeholder = 'e.g. *.log, test, ./generated',     scopes = { project = true } },
   { name = 'cwd',     label = 'Cwd',     placeholder = 'default: current cwd',             scopes = { project = true } },
 }
 
@@ -91,6 +127,7 @@ function M.render(ctx)
   local ns = ctx.namespace
   local fields = M.visible_fields(ctx)
 
+  local was_modifiable = vim.bo[buf].modifiable
   vim.bo[buf].modifiable = true
   local line_count = vim.api.nvim_buf_line_count(buf)
   local need = #fields + 1  -- 多一行给 results header 分隔
@@ -153,6 +190,14 @@ function M.render(ctx)
       end
       segs[#segs + 1] = { '    ' .. help_key .. ' for help', 'VVReplacePlaceholder' }
       virt_lines = { segs }
+    elseif field.name == 'replace' then
+      local apply = ctx.keymap_labels.replace_all .. ' Apply'
+      local hints = { apply }
+      if require('vv-replace.replace')._can_undo() then
+        local undo = ctx.keymap_labels.undo_last .. ' Undo'
+        hints = { undo .. '  ' .. apply, undo }
+      end
+      virt_lines = { aligned_label(ctx, field.label, hints) }
     else
       virt_lines = { { { ' ' .. field.label, 'VVReplaceLabel' } } }
     end
@@ -193,6 +238,7 @@ function M.render(ctx)
     id = ctx.extmark_ids.results_header,
     right_gravity = false,
   })
+  vim.bo[buf].modifiable = was_modifiable
 end
 
 -- 返回 field extmark 的当前行（动态获取，应对用户插入/删除行）
@@ -248,6 +294,23 @@ function M.get_values(ctx)
     values[field.name] = M.get_value(ctx, field.name)
   end
   return values
+end
+
+---清空光标所在的单行输入框，不删除 buffer 行，避免破坏表单布局
+---@param ctx VVReplaceCtx
+---@return boolean handled
+function M.clear_current(ctx)
+  if not vim.api.nvim_win_is_valid(ctx.win) then return false end
+
+  local row = vim.api.nvim_win_get_cursor(ctx.win)[1] - 1
+  if not M.field_at_row(ctx, row) then return false end
+
+  local line = vim.api.nvim_buf_get_lines(ctx.buf, row, row + 1, false)[1] or ''
+  vim.bo[ctx.buf].modifiable = true
+  vim.api.nvim_buf_set_text(ctx.buf, row, 0, row, #line, { '' })
+  pcall(vim.api.nvim_win_set_cursor, ctx.win, { row + 1, 0 })
+
+  return true
 end
 
 ---记录当前光标所在输入框的值

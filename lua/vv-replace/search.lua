@@ -12,6 +12,7 @@
 
 local Inputs = require('vv-replace.inputs')
 local Render = require('vv-replace.render')
+local Glob = require('vv-utils.glob')
 
 local M = {}
 
@@ -21,22 +22,11 @@ local function has_uppercase(s)
   return s:match('%u') ~= nil
 end
 
----@param raw string
----@return string[]
-local function split_globs(raw)
-  if not raw or raw == '' then return {} end
-  local list = {}
-  for part in string.gmatch(raw, '[^,]+') do
-    local trimmed = vim.trim(part)
-    if trimmed ~= '' then list[#list + 1] = trimmed end
-  end
-  return list
-end
-
 -- 构造 rg 命令参数列表
 ---@param ctx VVReplaceCtx
 ---@param values table<string, string>
 ---@return string[]? args 为 nil 表示搜索词为空，跳过搜索
+---@return string? error
 local function build_rg_args(ctx, values)
   local search = values.search
   if not search or search == '' then return nil end
@@ -75,14 +65,21 @@ local function build_rg_args(ctx, values)
   -- 这里用 --max-columns 防行太长导致 rg 内存暴涨
   args[#args + 1] = '--max-columns=500'
 
-  -- include / exclude
-  for _, g in ipairs(split_globs(values.include)) do
+  -- Include / Exclude 使用 VS Code 风格简写：
+  --   core/src   -> **/core/src + **/core/src/**
+  --   ./core/src -> /core/src + /core/src/**（锚定搜索 Cwd）
+  local include_globs, include_error = Glob.compile_rg_list(values.include)
+  if not include_globs then return nil, 'Include: ' .. include_error end
+  local exclude_globs, exclude_error = Glob.compile_rg_list(values.exclude, { negate = true })
+  if not exclude_globs then return nil, 'Exclude: ' .. exclude_error end
+
+  for _, g in ipairs(include_globs) do
     args[#args + 1] = '-g'
     args[#args + 1] = g
   end
-  for _, g in ipairs(split_globs(values.exclude)) do
+  for _, g in ipairs(exclude_globs) do
     args[#args + 1] = '-g'
-    args[#args + 1] = '!' .. g
+    args[#args + 1] = g
   end
 
   -- 额外用户参数
@@ -112,11 +109,12 @@ local function build_rg_args(ctx, values)
   if ctx.scope == 'file' and ctx.target_file then
     args[#args + 1] = ctx.target_file
   else
-    local cwd = values.cwd ~= '' and values.cwd or ctx.cwd
-    args[#args + 1] = cwd
+    -- vim.system 已经在 search_cwd 中运行；用 . 作为搜索路径，
+    -- 让 /foo/** 这类根锚定 glob 相对 Cwd 生效
+    args[#args + 1] = '.'
   end
 
-  return args
+  return args, nil
 end
 
 -- 按行范围过滤 rg json：丢掉范围外的 match，以及随之变空的 begin/end 块
@@ -192,7 +190,25 @@ local function run_search(ctx, on_done)
   abort_current(ctx)
 
   local values = Inputs.get_values(ctx)
-  local args = build_rg_args(ctx, values)
+  local args, args_error = build_rg_args(ctx, values)
+  local search_cwd = ctx.scope == 'file'
+    and nil
+    or (values.cwd ~= '' and values.cwd or ctx.cwd)
+  local display_root = ctx.scope == 'file'
+    and ctx.target_file and vim.fs.dirname(ctx.target_file)
+    or search_cwd
+  if display_root then
+    display_root = vim.fs.normalize(vim.fn.fnamemodify(display_root, ':p'))
+  end
+
+  if args_error then
+    ctx.state.last_json = nil
+    ctx.state.last_searched_inputs = vim.deepcopy(values)
+    ctx.state.searching = false
+    Render.clear_results(ctx)
+    Render.render_status(ctx, 'Error: ' .. args_error, true)
+    return
+  end
 
   -- 空搜索词：清空结果区
   if not args then
@@ -218,7 +234,7 @@ local function run_search(ctx, on_done)
   local job
   job = vim.system({ 'rg', unpack(args) }, {
     text = true,
-    cwd = (ctx.scope == 'file') and nil or (values.cwd ~= '' and values.cwd or ctx.cwd),
+    cwd = search_cwd,
     stdout = function(err, data)
       if finished or err or not data then return end
       local parsed, new_buf = parse_ndjson_chunk(data, stdout_buf)
@@ -260,7 +276,9 @@ local function run_search(ctx, on_done)
       -- 故 last_searched_inputs 始终对应当前 last_json，replace 据此判新鲜
       ctx.state.last_searched_inputs = vim.deepcopy(values)
 
-      local parsed = Render.parse_results(filtered, values.replace ~= nil and values.replace ~= '')
+      local parsed = Render.parse_results(filtered, values.replace ~= nil and values.replace ~= '', {
+        root = display_root,
+      })
       Render.render_results(ctx, parsed)
 
       if result.code ~= 0 and result.code ~= 1 and parsed.stats.files == 0 then

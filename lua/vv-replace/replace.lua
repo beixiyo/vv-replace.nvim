@@ -10,8 +10,13 @@ local Inputs = require('vv-replace.inputs')
 local Search = require('vv-replace.search')
 local Render = require('vv-replace.render')
 local fs = require('vv-utils.fs')
+local transaction = require('vv-utils.fs_transaction').new()
 
 local M = {}
+
+local function count_label(count, singular, plural)
+  return string.format('%d %s', count, count == 1 and singular or plural)
+end
 
 -- 按文件名拆分 rg json 流 → { [filename] = [match_obj, ...] }
 ---@param json_matches any[]
@@ -131,70 +136,98 @@ function M.replace_all(ctx, researched)
   end
 
   local choice = vim.fn.confirm(
-    string.format('Replace %d matches in %d files?', total_matches, #files),
+    string.format(
+      'Replace %s in %s?',
+      count_label(total_matches, 'match', 'matches'),
+      count_label(#files, 'file', 'files')
+    ),
     '&Yes\n&No', 1, 'Question'
   )
   if choice ~= 1 then return end
 
   ctx.state.replacing = true
+  local was_modifiable = vim.bo[ctx.buf].modifiable
   vim.bo[ctx.buf].modifiable = false
-  Render.render_status(ctx, 'Replacing 0/' .. #files)
+  Render.render_status(ctx, 'Preparing replacement')
 
-  -- 串行（简单 + 对 fs 压力友好；MVP 够用）
-  local ok_count = 0
-  local fail = {}
-  local function step(i)
-    -- 面板已关闭 / buffer 已被 wipe 时安全中止：剩余文件可重新搜索替换补齐，
-    -- 已替换的内容不会再命中，故中止可恢复，不会留下半成品状态
-    if ctx.state.closed or not vim.api.nvim_buf_is_valid(ctx.buf) then
+  ---@type VVUtilsFileTransactionEntry[]
+  local entries = {}
+  for _, file in ipairs(files) do
+    local ok_read, old = pcall(fs.read_all, file)
+    if not ok_read then
       ctx.state.replacing = false
+      vim.bo[ctx.buf].modifiable = was_modifiable
+      Render.render_status(ctx, 'Replacement cancelled', true)
+      vim.notify('vv-replace: read failed: ' .. file .. '\n' .. tostring(old), vim.log.levels.ERROR)
       return
     end
-    if i > #files then
-      -- 完成
-      -- buf 可能在最后一个 step 排队后才失效，这里再判一次再写 modifiable
-      if vim.api.nvim_buf_is_valid(ctx.buf) then
-        vim.bo[ctx.buf].modifiable = true
-      end
+
+    local ok_new, new_content = pcall(compute_new_content, old, grouped[file])
+    if not ok_new then
       ctx.state.replacing = false
-      if #fail > 0 then
-        Render.render_status(ctx, string.format('%d done, %d failed', ok_count, #fail), true)
-        vim.notify('vv-replace: failed files:\n' .. table.concat(fail, '\n'), vim.log.levels.ERROR)
-      else
-        Render.render_status(ctx, string.format('Replaced %d files', ok_count))
-      end
-      -- 刷新 buffer 视图 + 重跑搜索（已替换的匹配应消失）
-      vim.schedule(function()
-        -- 让已打开的 buffer 重新 checktime 加载磁盘新内容
+      vim.bo[ctx.buf].modifiable = was_modifiable
+      Render.render_status(ctx, 'Replacement cancelled', true)
+      vim.notify('vv-replace: ' .. file .. '\n' .. tostring(new_content), vim.log.levels.ERROR)
+      return
+    end
+
+    if new_content ~= old then
+      entries[#entries + 1] = { path = file, old = old, new = new_content }
+    end
+  end
+
+  local ok, err, touched = transaction:apply(entries)
+  ctx.state.replacing = false
+  if vim.api.nvim_buf_is_valid(ctx.buf) then
+    vim.bo[ctx.buf].modifiable = was_modifiable
+  end
+
+  if not ok then
+    Render.render_status(ctx, 'Replacement cancelled', true)
+    vim.notify('vv-replace: ' .. tostring(err), vim.log.levels.ERROR)
+    if touched then
+      vim.cmd('silent! checktime')
+      Search.search_now(ctx)
+    end
+    return
+  end
+
+  Inputs.render(ctx)
+  Render.render_status(ctx, 'Replaced ' .. count_label(#entries, 'file', 'files'))
+  vim.cmd('silent! checktime')
+  Search.search_now(ctx)
+end
+
+---@param ctx VVReplaceCtx?
+function M.undo_last(ctx)
+  local ok, err, count, touched = transaction:undo()
+  if not ok then
+    vim.notify('vv-replace: ' .. tostring(err), vim.log.levels.WARN)
+    if ctx and not ctx.state.closed then
+      Render.render_status(ctx, 'Undo cancelled', true)
+      if touched then
         vim.cmd('silent! checktime')
         Search.search_now(ctx)
-      end)
-      return
-    end
-    local file = files[i]
-    vim.schedule(function()
-      Render.render_status(ctx, string.format('Replacing %d/%d', i, #files))
-      local ok_read, old = pcall(fs.read_all, file)
-      if not ok_read then
-        fail[#fail + 1] = file .. ' (read failed: ' .. tostring(old) .. ')'
-      else
-        local ok_new, new_content = pcall(compute_new_content, old, grouped[file])
-        if not ok_new then
-          -- 陈旧/非法字节等导致拼接失败：不写入，列入失败清单，文件保持原样
-          fail[#fail + 1] = file .. ' (' .. tostring(new_content) .. ')'
-        elseif new_content ~= old then
-          local ok_write, werr = pcall(fs.write_all, file, new_content)
-          if not ok_write then
-            fail[#fail + 1] = file .. ' (' .. tostring(werr) .. ')'
-          else
-            ok_count = ok_count + 1
-          end
-        end
       end
-      step(i + 1)
-    end)
+    elseif touched then
+      vim.cmd('silent! checktime')
+    end
+    return
   end
-  step(1)
+
+  vim.cmd('silent! checktime')
+  local restored = count_label(count, 'file', 'files')
+  vim.notify('vv-replace: restored ' .. restored, vim.log.levels.INFO)
+  if ctx and not ctx.state.closed and vim.api.nvim_buf_is_valid(ctx.buf) then
+    Inputs.render(ctx)
+    Render.render_status(ctx, 'Restored ' .. restored)
+    Search.search_now(ctx)
+  end
+end
+
+---@return boolean
+function M._can_undo()
+  return transaction:can_undo()
 end
 
 return M
