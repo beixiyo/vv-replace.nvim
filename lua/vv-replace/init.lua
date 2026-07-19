@@ -1,7 +1,7 @@
 -- vv-replace.nvim — VSCode 风搜索替换面板（自实现，仅依赖 ripgrep）
 --
 -- 设计目标：
---   * 简洁可预测：两个主输入框 Search / Replace，Tab 循环切换
+--   * 简洁可预测：不占用补全键；输入框切换由用户按需配置
 --   * 输入历史：Up / Down 按字段回溯，默认持久化并跨 Neovim 重启保留
 --   * 模式显式：Shift-Tab 在 plainText / regex 之间切换，默认 plainText
 --   * smart case：搜索词含大写自动 -s，否则 -i（VSCode 同款）
@@ -50,7 +50,7 @@ local defaults = {
   rg_extra_args = {},
   history_persist = true,
   keymaps = {
-    next_input = '<Tab>',
+    next_input = '<C-j>',          -- 默认不占用 Tab；设为 false 可禁用字段切换
     toggle_mode = '<S-Tab>',       -- 按用户要求：S-Tab 用来切模式（见 actions.lua）
     history_prev = '<Up>',         -- 当前输入框的更早历史（normal + insert）
     history_next = '<Down>',       -- 当前输入框的更新历史（normal + insert）
@@ -83,7 +83,7 @@ local defaults = {
 }
 
 ---@class VVReplaceKeymaps
----@field next_input string  Tab：下一个输入框 @default '<Tab>'
+---@field next_input string|false  切换到下一个输入框；false 不绑定 @default '<C-j>'
 ---@field toggle_mode string  Shift-Tab：切换模式 plainText ↔ regex @default '<S-Tab>'
 ---@field history_prev string  当前输入框的更早历史（normal + insert） @default '<Up>'
 ---@field history_next string  当前输入框的更新历史（normal + insert） @default '<Down>'

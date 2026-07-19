@@ -22,6 +22,25 @@ local function has_uppercase(s)
   return s:match('%u') ~= nil
 end
 
+---@param path string
+---@return boolean
+local function is_absolute_path(path)
+  return path:sub(1, 1) == '/'
+    or path:match('^%a:[/\\]') ~= nil
+    or path:match('^[/\\][/\\]') ~= nil
+end
+
+---@param value string
+---@param fallback string
+---@return string
+local function resolve_cwd(value, fallback)
+  if value == '' then return vim.fs.normalize(fallback) end
+
+  value = vim.fn.expand(value)
+  if not is_absolute_path(value) then value = vim.fs.joinpath(fallback, value) end
+  return vim.fs.normalize(vim.fn.fnamemodify(value, ':p'))
+end
+
 -- 构造 rg 命令参数列表
 ---@param ctx VVReplaceCtx
 ---@param values table<string, string>
@@ -193,7 +212,7 @@ local function run_search(ctx, on_done)
   local args, args_error = build_rg_args(ctx, values)
   local search_cwd = ctx.scope == 'file'
     and nil
-    or (values.cwd ~= '' and values.cwd or ctx.cwd)
+    or resolve_cwd(values.cwd, ctx.cwd)
   local display_root = ctx.scope == 'file'
     and ctx.target_file and vim.fs.dirname(ctx.target_file)
     or search_cwd

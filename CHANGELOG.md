@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1 - 2026-07-19
+
+- 新增 `vv-replace.blink` 路径 source；宿主可让 Blink 在 Search / Replace 补全已加载 buffer 的词，在 Include / Exclude / Cwd 补全路径
+- `next_input` 默认改为 `<C-j>`，不再占用 `<Tab>` / `<CR>` 跳输入框；仍可设为 `false` 禁用
+
 ## 0.2.0 - 2026-07-19
 
 - Replace 标签右侧动态显示实际生效的 `Apply` / `Undo` 快捷键

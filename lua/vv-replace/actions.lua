@@ -1,7 +1,7 @@
 -- 动作 + 键位绑定
 --
 -- 键位设计（可在 config.keymaps 覆盖）：
---   <Tab>     (n+i) 下一个输入框（Search ↔ Replace [↔ Include ↔ Exclude ↔ Cwd]）
+--   <C-j>     (n+i) 切换到下一个输入框，可通过 next_input 覆盖或禁用
 --   <S-Tab>   (n+i) 切换模式 plainText ↔ regex
 --   <Up>/<Down> (n+i) 当前输入框的更早/更新历史
 --   <C-g>     (n+i) 静音（屏蔽 vim 默认 file-info）
@@ -126,7 +126,6 @@ end
 local function show_help(ctx)
   local ic = ctx.config and ctx.config.icons or {}
   local actions = {
-    ['cycle next input (Search/Replace/...)'] = { cat = 'Navigate', icon = ic.next_input },
     ['toggle search mode (plainText ↔ regex)'] = { cat = 'Navigate', icon = ic.toggle_mode },
     ['recall previous input']                 = { cat = 'Navigate', icon = ic.prev_match },
     ['recall next input']                     = { cat = 'Navigate', icon = ic.next_match },
@@ -139,6 +138,9 @@ local function show_help(ctx)
     ['close panel']                           = { cat = 'Panel',    icon = ic.close },
     ['show this help']                        = { cat = 'Panel',    icon = ic.help },
   }
+  if ctx.config.keymaps.next_input then
+    actions['cycle next input (Search/Replace/...)'] = { cat = 'Navigate', icon = ic.next_input }
+  end
   -- 搜索范围切换仅 project scope 绑定，help 也只在该 scope 列出
   if ctx.scope ~= 'file' then
     actions['toggle hidden files']      = { cat = 'Navigate', icon = ic.toggle_hidden }
@@ -160,8 +162,7 @@ function M.attach(ctx)
   local buf = ctx.buf
   local km = ctx.config.keymaps
 
-  -- Tab / S-Tab 在 n+i 都生效。i 模式下先退到 n 不行（会破坏 cursor 位置），
-  -- 直接执行并保持 insert
+  -- 字段切换键在 n+i 都生效；默认 C-j，把 Tab 完整交给补全插件
   map(buf, { 'n', 'i' }, km.next_input, function()
     Inputs.goto_sibling(ctx, 1)
     -- 确保 cursor 到行末（光标保持在输入位置），若当前是 normal 切 insert
@@ -248,15 +249,14 @@ function M.attach(ctx)
     show_help(ctx)
   end, 'vv-replace: show this help')
 
-  -- 输入行的 <CR>（insert）：避免插入换行破坏布局 —— 跳下一个输入框
-  -- （结果区是 normal 模式，已由 km.goto_match 绑在 n）
-  vim.keymap.set('i', '<CR>', function()
-    local row = vim.api.nvim_win_get_cursor(ctx.win)[1] - 1
-    if Inputs.field_at_row(ctx, row) then
-      Inputs.goto_sibling(ctx, 1)
-    end
-    -- 在输入区外（极少见）也不插换行：避免布局失控
-  end, { buffer = buf, silent = true })
+  -- 输入区保持单行；若用户把 next_input 显式配为 <CR>，上面的映射会接管它
+  if km.next_input ~= '<CR>' then
+    vim.keymap.set('i', '<CR>', '<Nop>', {
+      buffer = buf,
+      silent = true,
+      desc = 'vv-replace: keep inputs single-line',
+    })
+  end
 
   -- dd 在输入表单中表示清空当前字段，不能真的删掉整行；
   -- 否则后续字段和结果 header 会上移，extmark 无法再区分它们的语义

@@ -11,6 +11,7 @@
 --       - project 模式（<leader>sR）：Search + Replace + Include + Exclude + Cwd 全部默认显示
 
 local History = require('vv-utils.history')
+local PathCompletion = require('vv-utils.path_completion')
 
 local M = {}
 
@@ -198,6 +199,8 @@ function M.render(ctx)
         hints = { undo .. '  ' .. apply, undo }
       end
       virt_lines = { aligned_label(ctx, field.label, hints) }
+    elseif field.name == 'include' or field.name == 'exclude' or field.name == 'cwd' then
+      virt_lines = { aligned_label(ctx, field.label, { 'Tab Complete' }) }
     else
       virt_lines = { { { ' ' .. field.label, 'VVReplaceLabel' } } }
     end
@@ -356,6 +359,40 @@ function M.navigate_history(ctx, direction)
   pcall(vim.api.nvim_win_set_cursor, ctx.win, { row + 1, #value })
 
   return true
+end
+
+---@param path string
+---@return boolean
+local function is_absolute_path(path)
+  return path:sub(1, 1) == '/'
+    or path:match('^%a:[/\\]') ~= nil
+    or path:match('^[/\\][/\\]') ~= nil
+end
+
+---@param ctx VVReplaceCtx
+---@return string
+local function effective_cwd(ctx)
+  local value = M.get_value(ctx, 'cwd')
+  if value == '' then return ctx.cwd end
+
+  value = vim.fn.expand(value)
+  if not is_absolute_path(value) then value = vim.fs.joinpath(ctx.cwd, value) end
+  return vim.fs.normalize(value)
+end
+
+---生成 Include / Exclude / Cwd 当前字段的路径候选
+---@param ctx VVReplaceCtx
+---@param row integer 0-based
+---@param line string
+---@param cursor_col integer 0-based byte offset
+---@return vv-utils.path_completion.Result?
+function M.path_completion(ctx, row, line, cursor_col)
+  local name = M.field_at_row(ctx, row)
+  if name ~= 'include' and name ~= 'exclude' and name ~= 'cwd' then return nil end
+
+  return name == 'cwd'
+    and PathCompletion.directory(line, { cwd = ctx.cwd, cursor = cursor_col })
+    or PathCompletion.glob(line, { cwd = effective_cwd(ctx), cursor = cursor_col })
 end
 
 -- 填充初始值。render 必须已调用过

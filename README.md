@@ -58,7 +58,7 @@ Want my Neovim config? See <a href="https://github.com/beixiyo/dotfiles">dotfile
     rg_extra_args = {},
     history_persist = true,
     keymaps = {
-      next_input = '<Tab>',
+      next_input = '<C-j>', -- set false to disable; Tab remains dedicated to completion
       toggle_mode = '<S-Tab>',
       history_prev = '<Up>',
       history_next = '<Down>',
@@ -106,6 +106,10 @@ For Visual mode, wrap `open_visual({ scope?, use })`: `use='query'` uses the sel
 | `<leader>sv` in Visual mode | `open_visual({ scope='file', use='range' })` |
 
 Include and Exclude accept comma-separated VS Code-style search globs. `core/src` matches that path at any depth, while `./packages/core/src/` is anchored to Cwd. Each shorthand matches both the path itself and its descendants. Brace globs such as `*.{ts,tsx}`, character classes, escaped commas, and paths containing spaces are preserved. Use Cwd instead of `../` or absolute paths.
+
+The plugin exposes a `vv-replace.blink` source for Include, Exclude, and Cwd path completion. In a Blink-enabled host, `<Tab>` can own completion throughout the panel: Search and Replace complete words from loaded file buffers, while the three path fields use `vv-utils.path_completion`. Unanchored fragments such as `core/src` may resolve below any parent; `./packages/core/src` stays anchored to Cwd.
+
+`next_input` defaults to `<C-j>`, leaving `<Tab>` dedicated to completion and `<CR>` free from field navigation. Set it to `false` to disable field cycling.
 
 The Replace label shows the effective mapping on its right: normally `\r Apply`, then `\u Undo  \r Apply` after a successful replacement, and back to Apply after undo. You can also run `:VVReplaceUndo` outside the panel. Undo aborts without writing if a file changed externally or a related buffer has unsaved changes. The undo snapshot lasts for the current Neovim session
 
