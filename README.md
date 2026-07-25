@@ -4,7 +4,7 @@
 
 English | <a href="./README.zh-CN.md">中文</a>
 
-<img src="./docs/assets/vv-replace.png" alt="vv-replace demo" width="900" />
+<img src="https://github.com/beixiyo/vv-replace.nvim/releases/download/assets-2026-07-25/vv-replace.png" alt="vv-replace demo" width="900" />
 
 Want my Neovim config? See <a href="https://github.com/beixiyo/dotfiles">dotfiles</a>.
 
