@@ -25,7 +25,7 @@
 |------|------|
 | [Neovim ≥ 0.10](https://github.com/neovim/neovim) | `vim.system`、extmark `invalid`、`vim.fs.normalize` |
 | [ripgrep ≥ 13](https://github.com/BurntSushi/ripgrep) | 搜索引擎，使用 `--json` 流式输出 + `--replace` 计算替换结果 |
-| [vv-utils.nvim](https://github.com/beixiyo/vv-utils.nvim) | 共享工具库（fs、history、help_panel、ui_window） |
+| [vv-utils.nvim](https://github.com/beixiyo/vv-utils.nvim) | 共享工具库（fs、state、history、help_panel、ui_window） |
 
 ## 为什么要这个插件
 
@@ -49,7 +49,8 @@
   ---@type VVReplaceConfig
   opts = {
     position = 'right',            -- 'left' | 'right'
-    width = 60,                    -- 面板宽度
+    width = 60,                    -- 初始面板宽度
+    width_save_debounce_ms = 120,  -- resize 后持久化宽度的防抖延迟
     debounce_ms = 200,             -- 输入去抖延迟
     max_results = 10000,           -- 单次搜索匹配上限
     context_lines = 0,             -- rg --context=N（0 关闭）
@@ -89,13 +90,15 @@
 | 选项 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `position` | `'left' \| 'right'` | `'right'` | 面板位置 |
-| `width` | `integer` | `60` | 面板宽度 |
+| `width` | `integer` | `60` | 初始面板宽度；手动 resize 后跨关闭和 Neovim 重启保持 |
+| `width_save_debounce_ms` | `integer` | `120` | resize 后持久化宽度的防抖延迟（ms） |
 | `debounce_ms` | `integer` | `200` | 输入去抖延迟（ms） |
 | `max_results` | `integer` | `10000` | 单次搜索匹配上限，防大项目卡死 |
 | `context_lines` | `integer` | `0` | `rg --context=N`，0 = 关闭 |
 | `default_mode` | `'plainText' \| 'regex'` | `'plainText'` | 默认搜索模式 |
 | `rg_extra_args` | `string[]` | `{}` | 追加给所有 rg 调用的额外参数（如 `{ '--hidden' }`） |
 | `history_persist` | `boolean` | `true` | 把各字段最近 50 条历史写入 `stdpath('state')/vv-replace/history.json`；设为 `false` 仅在当前会话保留 |
+| `state` | `VVStateHandle` | `vv-utils.state.register('vv-replace', 'panel')` | 可选的状态句柄注入，供自定义存储或测试 |
 | `keymaps` | `VVReplaceKeymaps` | *见上方* | 面板内键位，可逐项覆盖 |
 | `icons` | `VVReplaceIcons` | *见上方* | NerdFont 图标；非 NerdFont 用户可改 ASCII |
 

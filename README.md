@@ -26,7 +26,7 @@ Want my Neovim config? See <a href="https://github.com/beixiyo/dotfiles">dotfile
 |---|---|
 | [Neovim 0.10+](https://github.com/neovim/neovim) | `vim.system`, invalidating extmarks, and `vim.fs.normalize` |
 | [ripgrep 13+](https://github.com/BurntSushi/ripgrep) | Search engine using streamed `--json` output and `--replace` to calculate replacements |
-| [vv-utils.nvim](https://github.com/beixiyo/vv-utils.nvim) | Shared filesystem, input-history, help-panel, and UI-window utilities |
+| [vv-utils.nvim](https://github.com/beixiyo/vv-utils.nvim) | Shared filesystem, persistent-state, input-history, help-panel, and UI-window utilities |
 
 ## Why this plugin
 
@@ -51,6 +51,7 @@ Want my Neovim config? See <a href="https://github.com/beixiyo/dotfiles">dotfile
   opts = {
     position = 'right',
     width = 60,
+    width_save_debounce_ms = 120,
     debounce_ms = 200,
     max_results = 10000,
     context_lines = 0,
@@ -83,13 +84,15 @@ Want my Neovim config? See <a href="https://github.com/beixiyo/dotfiles">dotfile
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `position` | `'left' \| 'right'` | `'right'` | Panel side |
-| `width` | `integer` | `60` | Panel width |
+| `width` | `integer` | `60` | Initial panel width; manual resizing is remembered across panel and Neovim restarts |
+| `width_save_debounce_ms` | `integer` | `120` | Delay before persisting a resized panel width |
 | `debounce_ms` | `integer` | `200` | Input debounce in milliseconds |
 | `max_results` | `integer` | `10000` | Match limit per search |
 | `context_lines` | `integer` | `0` | `rg --context=N`; zero disables context |
 | `default_mode` | `'plainText' \| 'regex'` | `'plainText'` | Initial search mode |
 | `rg_extra_args` | `string[]` | `{}` | Extra arguments for every ripgrep invocation |
 | `history_persist` | `boolean` | `true` | Store the latest 50 entries per field in `stdpath('state')/vv-replace/history.json`; set to `false` for session-only history |
+| `state` | `VVStateHandle` | `vv-utils.state.register('vv-replace', 'panel')` | Optional state handle injection for custom storage or tests |
 | `keymaps` | `VVReplaceKeymaps` | See above | Overridable panel mappings |
 | `icons` | `VVReplaceIcons` | See above | Nerd Font icons; ASCII is also supported |
 

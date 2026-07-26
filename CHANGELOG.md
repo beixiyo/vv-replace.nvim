@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2 - 2026-07-26
+
+- 面板手动调整后的宽度改由 `vv-utils.state` 跨关闭和 Neovim 重启持久化
+- 输入 UI 复用 `vv-utils.input`，把 Field、Help、Close 操作集中显示在 winbar
+- 将 actions 拆为帮助、生命周期、键位、导航和预览模块
+
 ## 0.3.1 - 2026-07-19
 
 - 适配 `vv-utils.fs` 领域入口，批量替换事务统一通过 `fs.new_transaction()` 创建，不再依赖已删除的 `vv-utils.fs_transaction`

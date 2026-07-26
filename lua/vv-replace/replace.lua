@@ -9,8 +9,8 @@
 local Inputs = require('vv-replace.inputs')
 local Search = require('vv-replace.search')
 local Render = require('vv-replace.render')
+local Transaction = require('vv-replace.transaction')
 local fs = require('vv-utils.fs')
-local transaction = fs.new_transaction()
 
 local M = {}
 
@@ -176,7 +176,7 @@ function M.replace_all(ctx, researched)
     end
   end
 
-  local ok, err, touched = transaction:apply(entries)
+  local ok, err, touched = Transaction.apply(entries)
   ctx.state.replacing = false
   if vim.api.nvim_buf_is_valid(ctx.buf) then
     vim.bo[ctx.buf].modifiable = was_modifiable
@@ -200,7 +200,7 @@ end
 
 ---@param ctx VVReplaceCtx?
 function M.undo_last(ctx)
-  local ok, err, count, touched = transaction:undo()
+  local ok, err, count, touched = Transaction.undo()
   if not ok then
     vim.notify('vv-replace: ' .. tostring(err), vim.log.levels.WARN)
     if ctx and not ctx.state.closed then
@@ -227,7 +227,7 @@ end
 
 ---@return boolean
 function M._can_undo()
-  return transaction:can_undo()
+  return Transaction.can_undo()
 end
 
 return M

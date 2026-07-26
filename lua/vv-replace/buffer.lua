@@ -8,9 +8,12 @@
 --   * autocmd 在 augroup 里管理，close 时整组清理
 
 local Inputs = require('vv-replace.inputs')
+local Input = require('vv-utils.input')
+local UIWindow = require('vv-utils.ui_window')
 local Search = require('vv-replace.search')
 local Highlight = require('vv-replace.highlight')
 local Actions = require('vv-replace.actions')
+local PanelState = require('vv-replace.panel_state')
 
 local M = {}
 
@@ -32,7 +35,8 @@ M.FILETYPE = 'vv-replace'
 ---@field target_range integer[]?  scope='file' 时的 1-based 行范围 { start, end }，限制 match/replace 的生效行
 ---@field source_buf integer?  range 生效时，源 buffer（用于高亮 + 关闭时清除）
 ---@field config VVReplaceConfig
----@field keymap_labels { replace_all: string, undo_last: string }
+---@field keymap_labels table<string, string>
+---@field panel_state VVReplacePanelState
 ---@field state VVReplaceState
 
 ---@class VVReplaceState
@@ -76,16 +80,11 @@ local function open_split(buf, opts)
   vim.api.nvim_win_set_width(win, opts.width)
   vim.api.nvim_win_set_buf(win, buf)
 
-  local ok_utils, ui_window = pcall(require, 'vv-utils.ui_window')
-  if ok_utils then
-    ui_window.hide_chrome(win, { cursorline = true, winfixwidth = true, winfixbuf = true })
-  else
-    vim.wo[win].number = false
-    vim.wo[win].relativenumber = false
-    vim.wo[win].signcolumn = 'no'
-    vim.wo[win].cursorline = true
-    vim.wo[win].wrap = false
-  end
+  UIWindow.hide_chrome(win, {
+    cursorline = true,
+    winfixwidth = true,
+    winfixbuf = true,
+  })
   return win, prev
 end
 
@@ -140,8 +139,15 @@ local function build_ctx(config, opts)
     source_buf = source_buf,
     config = config,
     keymap_labels = {
-      replace_all = Inputs.display_key(config.keymaps.replace_all),
-      undo_last = Inputs.display_key(config.keymaps.undo_last),
+      next_input = config.keymaps.next_input and Input.display_key(config.keymaps.next_input) or nil,
+      toggle_mode = Input.display_key(config.keymaps.toggle_mode),
+      replace_all = Input.display_key(config.keymaps.replace_all),
+      undo_last = Input.display_key(config.keymaps.undo_last),
+      goto_match = Input.display_key(config.keymaps.goto_match),
+      next_match = Input.display_key(config.keymaps.next_match),
+      prev_match = Input.display_key(config.keymaps.prev_match),
+      close = Input.display_key(config.keymaps.close),
+      help = Input.display_key(config.keymaps.help),
     },
     state = {
       result_marks = {},
@@ -183,12 +189,26 @@ local function attach_autocmds(ctx)
     group = group,
     callback = function()
       if ctx.state.closed or not vim.api.nvim_win_is_valid(ctx.win) then return end
+      ctx.panel_state:on_resize(ctx.win)
       Inputs.render(ctx)
     end,
   })
 
-  -- 防用户在输入区 Enter 破坏布局：map <CR> 到 noop（由 actions 处理）
-  -- 这部分已在 Actions 里通过 buffer-local keymap 绑定
+  vim.api.nvim_create_autocmd('WinClosed', {
+    group = group,
+    pattern = tostring(ctx.win),
+    once = true,
+    callback = function()
+      M._on_buf_gone(ctx)
+    end,
+  })
+
+  vim.api.nvim_create_autocmd('VimLeavePre', {
+    group = group,
+    callback = function()
+      ctx.panel_state:close(ctx.win)
+    end,
+  })
 end
 
 ---@param config VVReplaceConfig
@@ -213,6 +233,8 @@ function M.open(config, opts)
   local win, prev_win = open_split(ctx.buf, config)
   ctx.win = win
   ctx.prev_win = prev_win
+  ctx.panel_state = PanelState.new(config.state, config)
+  ctx.panel_state:track(win)
   M.current = ctx
 
   Inputs.render(ctx)
@@ -224,7 +246,7 @@ function M.open(config, opts)
   end
   Inputs.fill(ctx, prefills)
 
-  Actions.attach(ctx)
+  Actions.attach(ctx, { close = M.close })
   attach_autocmds(ctx)
 
   -- 范围模式：在源 buffer 上给选区行打持久高亮，面板关闭时清除
@@ -249,67 +271,57 @@ function M.open(config, opts)
   end
 end
 
-function M.close()
-  local ctx = M.current
-  if not ctx then return end
-  Inputs.record_all(ctx)
+---@param timer? uv.uv_timer_t
+local function stop_timer(timer)
+  if not timer then return end
+  pcall(function()
+    timer:stop()
+    timer:close()
+  end)
+end
+
+---@param ctx VVReplaceCtx
+---@return boolean finalized
+local function finalize(ctx)
+  if M.current ~= ctx or ctx.state.closed then return false end
   ctx.state.closed = true
+
+  ctx.panel_state:close(ctx.win)
+  pcall(Inputs.record_all, ctx)
+
   if ctx.state.rg_abort then pcall(ctx.state.rg_abort) end
-  if ctx.state.search_timer then
-    pcall(function() ctx.state.search_timer:stop() ctx.state.search_timer:close() end)
-    ctx.state.search_timer = nil
-  end
-  if ctx.state.flash_timer then
-    pcall(function() ctx.state.flash_timer:stop() ctx.state.flash_timer:close() end)
-    ctx.state.flash_timer = nil
-  end
-  -- 清除源 buffer 上的范围高亮
+  ctx.state.rg_abort = nil
+  stop_timer(ctx.state.search_timer)
+  stop_timer(ctx.state.flash_timer)
+  ctx.state.search_timer = nil
+  ctx.state.flash_timer = nil
+
   if ctx.source_buf and vim.api.nvim_buf_is_valid(ctx.source_buf) then
     pcall(vim.api.nvim_buf_clear_namespace, ctx.source_buf, ctx.namespace, 0, -1)
   end
-
-  -- 清除所有预览过的 buffer 上残留的 diff 高亮（不止当前 prev_win 的 buffer）
   Actions._clear_all_preview_diff(ctx)
-
   pcall(vim.api.nvim_del_augroup_by_id, ctx.augroup)
+  M.current = nil
+
+  return true
+end
+
+function M.close()
+  local ctx = M.current
+  if not ctx then return end
+  finalize(ctx)
+
   if vim.api.nvim_buf_is_valid(ctx.buf) then
     pcall(vim.api.nvim_buf_delete, ctx.buf, { force = true })
   end
   if vim.api.nvim_win_is_valid(ctx.prev_win) then
     pcall(vim.api.nvim_set_current_win, ctx.prev_win)
   end
-  M.current = nil
 end
 
 ---@param ctx VVReplaceCtx
 function M._on_buf_gone(ctx)
-  if M.current == ctx then
-    pcall(Inputs.record_all, ctx)
-    ctx.state.closed = true
-    -- kill 运行中的 rg 进程
-    if ctx.state.rg_abort then pcall(ctx.state.rg_abort) end
-    -- 停止 search_timer
-    if ctx.state.search_timer then
-      pcall(function() ctx.state.search_timer:stop() ctx.state.search_timer:close() end)
-      ctx.state.search_timer = nil
-    end
-    -- 停止 flash_timer
-    if ctx.state.flash_timer then
-      pcall(function() ctx.state.flash_timer:stop() ctx.state.flash_timer:close() end)
-      ctx.state.flash_timer = nil
-    end
-    -- 面板被外部 :q/:bd 关掉时，同样清源 buffer 的范围高亮
-    if ctx.source_buf and vim.api.nvim_buf_is_valid(ctx.source_buf) then
-      pcall(vim.api.nvim_buf_clear_namespace, ctx.source_buf, ctx.namespace, 0, -1)
-    end
-
-    -- 清除所有预览过的 buffer 上残留的 diff 高亮（不止当前 prev_win 的 buffer）
-    Actions._clear_all_preview_diff(ctx)
-
-    -- 清理 augroup
-    pcall(vim.api.nvim_del_augroup_by_id, ctx.augroup)
-    M.current = nil
-  end
+  finalize(ctx)
 end
 
 ---@param config VVReplaceConfig

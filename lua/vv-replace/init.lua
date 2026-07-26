@@ -28,21 +28,25 @@
 --   :VVReplaceUndo
 
 local M = {}
+local PanelState = require('vv-replace.panel_state')
 
 ---@class VVReplaceConfig
 ---@field position 'left'|'right'  侧边面板位置 @default 'right'
 ---@field width integer  面板宽度（列） @default 60
+---@field width_save_debounce_ms integer  resize 后持久化宽度的防抖毫秒 @default 120
 ---@field debounce_ms integer  输入去抖毫秒 @default 200
 ---@field max_results integer  单次搜索结果条数上限，防大项目卡死 @default 10000
 ---@field context_lines integer  每个匹配上下文行数（0 = 关闭） @default 0
 ---@field default_mode 'plainText'|'regex' @default 'plainText'
 ---@field rg_extra_args string[]  追加给所有 rg 调用的额外参数 @default {}
 ---@field history_persist boolean  跨 Neovim 重启持久化输入历史 @default true
+---@field state VVStateHandle?  面板持久状态句柄，主要用于自定义存储或测试 @default register('vv-replace', 'panel')
 ---@field keymaps VVReplaceKeymaps
 ---@field icons VVReplaceIcons
 local defaults = {
   position = 'right',
   width = 60,
+  width_save_debounce_ms = 120,
   debounce_ms = 200,
   max_results = 10000,
   context_lines = 0,
@@ -99,25 +103,29 @@ local defaults = {
 
 ---@class VVReplaceIcons
 ---@field plain string        mode 徽章：plainText（默认 NerdFont text-box） @default '󰊄'
----@field regex string        mode 徽章：regex（默认 NerdFont regex） @default ''
+---@field regex string        mode 徽章：regex（默认 NerdFont regex） @default ''
 ---@field next_input string   help 浮窗图标 @default '󰁔'
 ---@field toggle_mode string  help 浮窗图标 @default '󰁨'
 ---@field toggle_hidden string  搜索范围徽章 / help 浮窗图标（显隐隐藏文件） @default ''
 ---@field toggle_gitignored string  搜索范围徽章 / help 浮窗图标（显隐忽略文件） @default ''
----@field goto_match string   help 浮窗图标 @default ''
+---@field goto_match string   help 浮窗图标 @default ''
 ---@field next_match string   help 浮窗图标（下一个匹配） @default '↓'
 ---@field prev_match string   help 浮窗图标（上一个匹配） @default '↑'
----@field replace_all string  help 浮窗图标 @default ''
----@field undo_last string  help 浮窗图标 @default ''
----@field close string        help 浮窗图标 @default ''
+---@field replace_all string  help 浮窗图标 @default ''
+---@field undo_last string  help 浮窗图标 @default '󰕌'
+---@field close string        help 浮窗图标 @default ''
 ---@field help string         help 浮窗图标 @default '󰌌'
----@field title string        help 浮窗标题图标 @default ''
+---@field title string        help 浮窗标题图标 @default ''
 
 local config = defaults
 
 ---@param opts? table
 function M.setup(opts)
+  local configured_state = opts and opts.state
   config = vim.tbl_deep_extend('force', defaults, opts or {})
+  config.state = configured_state or require('vv-utils.state').register('vv-replace', 'panel')
+  config.width = PanelState.load_width(config.state, config.width)
+
   require('vv-replace.inputs').setup_history({ persist = config.history_persist })
   require('vv-replace.highlight').setup()
 
