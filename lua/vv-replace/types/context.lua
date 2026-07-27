@@ -1,0 +1,46 @@
+---@class VVReplaceCtx
+---@field buf integer
+---@field win integer
+---@field prev_win integer
+---@field namespace integer
+---@field augroup integer
+---@field extmark_ids table<string, integer>
+---@field mode 'plainText'|'regex'
+---@field show_hidden boolean  true=搜索包含隐藏文件（rg --hidden）；默认 false
+---@field show_ignored boolean  true=搜索包含 .gitignore 忽略文件（rg --no-ignore）；默认 false
+---@field scope 'project'|'file'
+---@field cwd string
+---@field target_file string?  scope='file' 时的目标文件绝对路径
+---@field target_range integer[]?  scope='file' 时的 1-based 行范围 { start, end }，限制 match/replace 的生效行
+---@field source_buf integer?  range 生效时，源 buffer（用于高亮 + 关闭时清除）
+---@field config VVReplaceConfig
+---@field keymap_labels table<string, string>
+---@field panel_state VVReplacePanelState
+---@field state VVReplaceState
+
+---@class VVReplaceState
+---@field last_inputs table<string, string>?
+---@field search_timer uv.uv_timer_t?
+---@field flash_timer uv.uv_timer_t?  模式切换 toast 的计时器
+---@field rg_abort fun()?  当前搜索可中止
+---@field result_marks table<integer, VVReplaceResultMark>  key=buffer row
+---@field result_extmark_ids integer[]  结果区的高亮 extmark id，清结果时统一删
+---@field preview_ns integer?  预览 diff 高亮/虚拟文本用的 namespace
+---@field preview_bufs table<integer, true>?  已打过预览 diff 的 buffer 集合，切换/关闭时逐个清 extmark
+---@field last_status { text: string, is_error?: boolean }?  最近一次正式 status，供 flash 还原
+---@field last_json any[]?  上次完整的 rg json 数组，供 replace 复用
+---@field last_searched_inputs table<string, string>?  最近一次实际跑搜索（写 last_json）所用的输入快照，供 replace 判新鲜
+---@field searching boolean
+---@field replacing boolean
+---@field closed boolean
+
+---@class VVReplaceOpenOpts
+---@field scope? 'project'|'file'
+---@field cwd? string
+---@field query? string
+---@field range? integer[]  1-based 行范围 { start, end }，仅在 scope='file' 时生效（V 模式只改选区）
+
+---@class VVReplaceVisualOpts
+---@field scope? 'project'|'file'  搜索范围；省略=工作区(project)。use='range' 时强制按 file 处理 @default 'project'
+---@field use 'query'|'range'  选区用途：'query'=单行选区预填为搜索词 / 'range'=选中行作为替换范围（仅 file 生效） @default 'query'
+---@field cwd? string  工作目录（仅 project scope）

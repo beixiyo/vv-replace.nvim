@@ -1,0 +1,89 @@
+---@class VVReplaceConfig
+---@field position 'left'|'right'  侧边面板位置 @default 'right'
+---@field width integer  面板宽度（列） @default 60
+---@field width_save_debounce_ms integer  resize 后持久化宽度的防抖毫秒 @default 120
+---@field debounce_ms integer  输入去抖毫秒 @default 200
+---@field max_results integer  单次搜索结果条数上限，防大项目卡死 @default 10000
+---@field context_lines integer  每个匹配上下文行数（0 = 关闭） @default 0
+---@field default_mode 'plainText'|'regex' @default 'plainText'
+---@field rg_extra_args string[]  追加给所有 rg 调用的额外参数 @default {}
+---@field history_persist boolean  跨 Neovim 重启持久化输入历史 @default true
+---@field state VVStateHandle?  面板持久状态句柄，主要用于自定义存储或测试 @default register('vv-replace', 'panel')
+---@field keymaps VVReplaceKeymaps
+---@field icons VVReplaceIcons
+
+---@class VVReplaceKeymaps
+---@field next_input string|false  切换到下一个输入框；false 不绑定 @default '<C-j>'
+---@field toggle_mode string  Shift-Tab：切换模式 plainText ↔ regex @default '<S-Tab>'
+---@field history_prev string  当前输入框的更早历史（normal + insert） @default '<Up>'
+---@field history_next string  当前输入框的更新历史（normal + insert） @default '<Down>'
+---@field toggle_hidden string|string[]  切换显隐隐藏文件（dotfile/.env），yazi 风 @default { '.', '<M-h>' }
+---@field toggle_gitignored string|string[]  切换显隐 .gitignore 忽略文件，yazi 风 @default { 'I', '<M-i>' }
+---@field replace_all string @default '<localleader>r'
+---@field undo_last string @default '<localleader>u'
+---@field goto_match string  回车：跳到光标处匹配 @default '<CR>'
+---@field next_match string  跳到下一个匹配（normal + insert 都生效） @default '<C-n>'
+---@field prev_match string  跳到上一个匹配（normal + insert 都生效） @default '<C-p>'
+---@field close string @default 'q'
+---@field help string @default 'g?'
+
+---@class VVReplaceIcons
+---@field plain string        mode 徽章：plainText（默认 NerdFont text-box） @default '󰊄'
+---@field regex string        mode 徽章：regex（默认 NerdFont regex） @default ''
+---@field next_input string   help 浮窗图标 @default '󰁔'
+---@field toggle_mode string  help 浮窗图标 @default '󰁨'
+---@field toggle_hidden string  搜索范围徽章 / help 浮窗图标（显隐隐藏文件） @default ''
+---@field toggle_gitignored string  搜索范围徽章 / help 浮窗图标（显隐忽略文件） @default ''
+---@field goto_match string   help 浮窗图标 @default ''
+---@field next_match string   help 浮窗图标（下一个匹配） @default '↓'
+---@field prev_match string   help 浮窗图标（上一个匹配） @default '↑'
+---@field replace_all string  help 浮窗图标 @default ''
+---@field undo_last string  help 浮窗图标 @default '󰕌'
+---@field close string        help 浮窗图标 @default ''
+---@field help string         help 浮窗图标 @default '󰌌'
+---@field title string        help 浮窗标题图标 @default ''
+
+---@class VVReplaceConfigOpts
+---@field position? 'left'|'right'
+---@field width? integer
+---@field width_save_debounce_ms? integer
+---@field debounce_ms? integer
+---@field max_results? integer
+---@field context_lines? integer
+---@field default_mode? 'plainText'|'regex'
+---@field rg_extra_args? string[]
+---@field history_persist? boolean
+---@field state? VVStateHandle
+---@field keymaps? VVReplaceKeymapsOpts
+---@field icons? VVReplaceIconsOpts
+
+---@class VVReplaceKeymapsOpts
+---@field next_input? string|false
+---@field toggle_mode? string
+---@field history_prev? string
+---@field history_next? string
+---@field toggle_hidden? string|string[]
+---@field toggle_gitignored? string|string[]
+---@field replace_all? string
+---@field undo_last? string
+---@field goto_match? string
+---@field next_match? string
+---@field prev_match? string
+---@field close? string
+---@field help? string
+
+---@class VVReplaceIconsOpts
+---@field plain? string
+---@field regex? string
+---@field next_input? string
+---@field toggle_mode? string
+---@field toggle_hidden? string
+---@field toggle_gitignored? string
+---@field goto_match? string
+---@field next_match? string
+---@field prev_match? string
+---@field replace_all? string
+---@field undo_last? string
+---@field close? string
+---@field help? string
+---@field title? string
