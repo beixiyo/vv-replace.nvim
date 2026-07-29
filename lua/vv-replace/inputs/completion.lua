@@ -29,14 +29,29 @@ end
 ---@param row integer 0-based
 ---@param line string
 ---@param cursor_col integer 0-based byte offset
----@return vv-utils.path_completion.Result?
-function M.get(ctx, row, line, cursor_col)
+---@param defaults? VVCompletionDefaults
+---@param callback? fun(result: vv-utils.path_completion.Result)
+---@return vv-utils.path_completion.Result|fun()|nil
+function M.get(ctx, row, line, cursor_col, defaults, callback)
   local name = Model.field_at_row(ctx, row)
   if name ~= 'include' and name ~= 'exclude' and name ~= 'cwd' then return nil end
 
+  local opts = {
+    cwd = name == 'cwd' and ctx.cwd or effective_cwd(ctx),
+    cursor = cursor_col,
+    max_items = defaults and defaults.max_items,
+    scan_max_items = defaults and defaults.scan_max_items,
+    timeout_ms = defaults and defaults.timeout_ms,
+  }
+
+  if callback then
+    if name == 'cwd' then return PathCompletion.directory_async(line, opts, callback) end
+    return PathCompletion.glob_async(line, opts, callback)
+  end
+
   return name == 'cwd'
-    and PathCompletion.directory(line, { cwd = ctx.cwd, cursor = cursor_col })
-    or PathCompletion.glob(line, { cwd = effective_cwd(ctx), cursor = cursor_col })
+    and PathCompletion.directory(line, opts)
+    or PathCompletion.glob(line, opts)
 end
 
 return M

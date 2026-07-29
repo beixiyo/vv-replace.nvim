@@ -16,6 +16,7 @@
 ---@field config VVReplaceConfig
 ---@field keymap_labels table<string, string>
 ---@field panel_state VVReplacePanelState
+---@field completion_detach? fun()  释放 buffer-local 补全 descriptor
 ---@field state VVReplaceState
 
 ---@class VVReplaceState

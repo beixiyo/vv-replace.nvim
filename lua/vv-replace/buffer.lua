@@ -8,6 +8,7 @@
 --   * autocmd 在 augroup 里管理，close 时整组清理
 
 local Inputs = require('vv-replace.inputs')
+local Completion = require('vv-utils.completion')
 local Input = require('vv-utils.input')
 local UIWindow = require('vv-utils.ui_window')
 local Search = require('vv-replace.search')
@@ -196,6 +197,20 @@ function M.open(config, opts)
   M.current = ctx
 
   Inputs.render(ctx)
+  ctx.completion_detach = Completion.attach(ctx.buf, {
+    trigger_characters = { '/', '.', ',', '!', '\\' },
+    enabled = function()
+      if ctx.state.closed or vim.api.nvim_get_current_buf() ~= ctx.buf then return false end
+      local row = vim.api.nvim_win_get_cursor(0)[1] - 1
+      local field = Inputs.field_at_row(ctx, row)
+      return field == 'include' or field == 'exclude' or field == 'cwd'
+    end,
+    complete = function(context, defaults, callback)
+      if ctx.state.closed then return nil end
+      local row = context.cursor[1] - 1
+      return Inputs.path_completion(ctx, row, context.line, context.cursor[2], defaults, callback)
+    end,
+  })
 
   -- 预填 query（visual selection / 参数）
   local prefills = {}
@@ -245,6 +260,10 @@ local function finalize(ctx)
   ctx.state.closed = true
 
   ctx.panel_state:close(ctx.win)
+  if ctx.completion_detach then
+    ctx.completion_detach()
+    ctx.completion_detach = nil
+  end
   pcall(Inputs.record_all, ctx)
 
   if ctx.state.rg_abort then pcall(ctx.state.rg_abort) end

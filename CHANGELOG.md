@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0 - 2026-07-29
+
+### Breaking
+
+- 删除 `vv-replace.blink`；Include / Exclude / Cwd 改用 `vv-utils.completion` 与 `vv-utils.blink`，Search / Replace 直接使用 Blink 内置 buffer source
+
 ## 0.3.2 - 2026-07-26
 
 - 面板手动调整后的宽度改由 `vv-utils.state` 跨关闭和 Neovim 重启持久化
@@ -25,7 +31,7 @@
 - 输入框中的 `dd` 改为清空当前字段，不再删除表单行并将状态误当成 Cwd
 - 结果文件路径相对搜索 Cwd 显示，并复用 `vv-utils.path.collapse_middle()` 折叠中间层级；跳转仍保留完整路径
 
-## [0.1.0] - 2026-07-13
+## 0.1.0 - 2026-07-13
 
 ### Added
 - **匹配项快速跳转**：面板内 `<C-n>` / `<C-p>` 跳到下一个 / 上一个匹配（到头回绕），normal 与 insert 模式均生效（insert 下先退出插入再跳）；光标移到匹配行后 CursorMoved 自动预览对应源文件。键位 `keymaps.next_match` / `keymaps.prev_match` 可配置

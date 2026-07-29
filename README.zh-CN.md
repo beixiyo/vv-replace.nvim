@@ -114,10 +114,6 @@
 | `<leader>sR`（visual） | `open_visual({ use='query' })`：选区作搜索词，工作区替换 |
 | `<leader>sv`（visual） | `open_visual({ scope='file', use='range' })`：仅在选中行内查找替换 |
 
-Include / Exclude 支持按顶层逗号分隔的 VS Code 风格搜索 glob。`core/src` 匹配任意深度的同名路径，`./packages/core/src/` 则锚定到 Cwd；每条简写同时匹配路径本体和目录后代。支持 `*.{ts,tsx}` brace glob、字符类、转义逗号和含空格路径。`../` 或绝对路径请改用 Cwd
-
-插件暴露了 `vv-replace.blink` source，供 Include / Exclude / Cwd 做路径补全。在启用 Blink 的宿主配置中，`<Tab>` 可统一负责整个面板的补全：Search / Replace 从已加载的普通文件 buffer 取词，三个路径字段使用 `vv-utils.path_completion`。`core/src` 这类未锚定片段可在任意父路径下补全，`./packages/core/src` 则始终锚定到 Cwd
-
 `next_input` 默认使用 `<C-j>`，因此 `<Tab>` 始终专用于补全，`<CR>` 也不负责跳输入框；设为 `false` 可关闭字段循环
 
 面板内 `<Up>` / `<Down>` 按字段回溯输入历史。历史默认写入 Neovim state 目录，关闭面板或重启 Neovim 后仍可继续回溯；不会写入项目或 dotfiles。`<C-n>` / `<C-p>` 跳到下一个 / 上一个匹配（normal 与 insert 均可），光标移动时自动预览源文件
