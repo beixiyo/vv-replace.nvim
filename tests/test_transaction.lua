@@ -102,7 +102,7 @@ assert_eq(ctx.extmark_ids.search_ph, search_placeholder_id)
 
 local winbar = vim.wo[win].winbar
 assert(winbar:find('[title] Replace', 1, true), winbar)
-assert(winbar:find('[field] ^J Field', 1, true), winbar)
+assert(winbar:find('[field] ^j Field', 1, true), winbar)
 assert(winbar:find('[help] g?', 1, true), winbar)
 assert(winbar:find('[close] q', 1, true), winbar)
 

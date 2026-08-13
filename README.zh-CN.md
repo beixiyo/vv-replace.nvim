@@ -72,14 +72,15 @@
     },
     icons = {
       plain       = '󰊄',           -- mode 徽章: plainText
-      regex       = '',           -- mode 徽章: regex
+      regex       = '',          -- mode 徽章: regex
       next_input  = '󰁔',
       toggle_mode = '󰁨',
-      goto_match  = '',
-      replace_all = '', undo_last = '',
-      close       = '',
+      toggle_hidden = '󰈈', toggle_gitignored = '󰊢',
+      goto_match  = '',
+      replace_all = '', undo_last = '󰕌',
+      close       = '',
       help        = '󰌌',
-      title       = '',
+      title       = '',
     },
   },
 }

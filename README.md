@@ -72,8 +72,9 @@ Want my Neovim config? See <a href="https://github.com/beixiyo/dotfiles">dotfile
       help = 'g?',
     },
     icons = {
-      plain = '󰊄', regex = '', next_input = '󰁔', toggle_mode = '󰁨',
-      goto_match = '', replace_all = '', undo_last = '', close = '', help = '󰌌', title = '',
+      plain = '󰊄', regex = '', next_input = '󰁔', toggle_mode = '󰁨',
+      toggle_hidden = '󰈈', toggle_gitignored = '󰊢', goto_match = '',
+      replace_all = '', undo_last = '󰕌', close = '', help = '󰌌', title = '',
     },
   },
 }

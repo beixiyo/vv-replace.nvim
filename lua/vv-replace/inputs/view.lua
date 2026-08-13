@@ -119,8 +119,8 @@ function M.search_label(ctx, field)
     if #enabled > 0 then
       chunks[#chunks + 1] = { '    ' .. table.concat(enabled, '  '), 'VVReplaceLabelMode' }
     else
-      local hidden_key = first_key(km.toggle_hidden) or '.'
-      local ignored_key = first_key(km.toggle_gitignored) or 'I'
+      local hidden_key = Input.display_key(first_key(km.toggle_hidden) or '.')
+      local ignored_key = Input.display_key(first_key(km.toggle_gitignored) or 'I')
       chunks[#chunks + 1] = {
         '  (' .. hidden_key .. ' hidden, ' .. ignored_key .. ' ignored)',
         'VVReplacePlaceholder',
