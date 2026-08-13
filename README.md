@@ -6,6 +6,8 @@ English | <a href="./README.zh-CN.md">中文</a>
 
 <img src="https://github.com/beixiyo/vv-replace.nvim/releases/download/assets-2026-07-25/vv-replace.png" alt="vv-replace demo" width="900" />
 
+<img src="https://github.com/beixiyo/vv-replace.nvim/releases/download/assets-2026-07-25/vv-replace-help.png" alt="vv-replace keymap help" width="900" />
+
 Want my Neovim config? See <a href="https://github.com/beixiyo/dotfiles">dotfiles</a>.
 
 <em>A VS Code-style search-and-replace panel with plain-text defaults, smart case, and diff previews</em>
