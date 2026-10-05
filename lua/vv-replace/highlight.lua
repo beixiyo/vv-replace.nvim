@@ -16,14 +16,14 @@ function M.setup()
     VVReplaceSeparator     = { link = 'WinSeparator' },
 
     VVReplaceResultsHeader = { link = 'Comment' },
-    VVReplaceFilePath      = { link = 'Directory' },
+    VVReplaceFilePath      = { link = 'Directory' },   -- 文件名
+    VVReplaceFileDir       = { link = 'Comment' },     -- 文件名前的目录部分，弱化
+    VVReplaceFoldIcon      = { link = 'Comment' },     -- 文件行的折叠 chevron
     VVReplaceFileCount     = { link = 'Comment' },
     VVReplaceLineNumber    = { link = 'LineNr' },
     VVReplaceMatch         = { link = 'Search' },
     VVReplaceMatchRemoved  = { link = 'DiffDelete' },
     VVReplaceMatchAdded    = { link = 'DiffAdd' },
-    VVReplaceDiffRemoved   = { link = 'DiffDelete' },
-    VVReplaceDiffAdded     = { link = 'DiffAdd' },
 
     VVReplaceStatus        = { link = 'Comment' },
     VVReplaceStatusError   = { link = 'ErrorMsg' },

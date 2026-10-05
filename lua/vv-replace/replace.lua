@@ -4,7 +4,12 @@
 --   1. 复用 ctx.state.last_json —— 搜索时已带 --replace=<text>，submatch.replacement 直接可用
 --   2. 对每个 match 文件：fs_read 整文件 → 按 match 的 absolute_offset 精确拼接 → fs_write
 --      —— 不用 rg --passthrough 避免末尾换行问题
---   3. 每写完一个文件就刷进度；全部完成后重跑搜索刷新结果
+--   3. 读取拼接与事务写入都按文件分片（每片约 8ms 后经 uv timer 让出），结果区标题行的
+--      loading 帧与进度 label 全程转动；全部完成后重跑搜索，帧持续到新结果渲染完毕
+--      帧落在结果区标题行，与搜索共用 Render.acquire_loading 的同一 slot，生命周期各自独立
+--
+-- 面板中途关闭：读取拼接阶段尚未写盘，直接停止；写入阶段已开始的事务不可取消，
+-- 照常写完或回滚（不留半写状态），结果改用 notify 告知
 
 local Inputs = require('vv-replace.inputs')
 local Search = require('vv-replace.search')
@@ -12,7 +17,17 @@ local Render = require('vv-replace.render')
 local Transaction = require('vv-replace.transaction')
 local fs = require('vv-utils.fs')
 
+local uv = vim.uv
+
 local M = {}
+
+local SLICE_BUDGET_MS = 8
+
+local STEP_LABELS = {
+  validate = 'Checking',
+  apply = 'Replacing',
+  compensate = 'Rolling back',
+}
 
 local function count_label(count, singular, plural)
   return string.format('%d %s', count, count == 1 and singular or plural)
@@ -79,10 +94,82 @@ local function compute_new_content(old, matches)
   return table.concat(out)
 end
 
+---@param verb string
+---@param done integer
+---@param total integer
+---@return string
+local function progress_label(verb, done, total)
+  return string.format('%s %d/%d', verb, done, total)
+end
+
+-- 按文件分片读取并拼接新内容：每片按时间预算处理若干文件后经 uv timer 让出主线程
+-- 只读不写；is_cancelled 为真时在下一片开始前停止并以 cancelled 结束
+---@param files string[]
+---@param grouped table<string, any[]>
+---@param opts VVReplacePrepareOpts
+local function prepare_entries(files, grouped, opts)
+  ---@type vv-utils.fs.TransactionEntry[]
+  local entries = {}
+  local index = 1
+  local timer = uv.new_timer()
+
+  local function finish(result)
+    if timer and not timer:is_closing() then timer:close() end
+    opts.on_done(result)
+  end
+
+  local function step()
+    if opts.is_cancelled() then return finish({ cancelled = true }) end
+
+    local started = uv.hrtime()
+    while index <= #files and (uv.hrtime() - started) / 1e6 < SLICE_BUDGET_MS do
+      local file = files[index]
+      index = index + 1
+
+      local ok_read, old = pcall(fs.read_all, file)
+      if not ok_read then
+        return finish({ error = 'read failed: ' .. file .. '\n' .. tostring(old) })
+      end
+      local ok_new, new_content = pcall(compute_new_content, old, grouped[file])
+      if not ok_new then
+        return finish({ error = file .. '\n' .. tostring(new_content) })
+      end
+      if new_content ~= old then
+        entries[#entries + 1] = { path = file, old = old, new = new_content }
+      end
+    end
+
+    opts.on_progress(index - 1, #files)
+    if index > #files then return finish({ entries = entries }) end
+    if not timer then return finish({ error = 'could not create timer' }) end
+    timer:start(0, 0, vim.schedule_wrap(step))
+  end
+
+  step()
+end
+
+-- 写入后的收尾：summary 先记为状态，再发起重搜；重搜在同一 slot 登记 Searching 后才释放本次登记，
+-- 帧不中断地持续到新结果渲染完。重搜写出的 "N matches in M files" 与 summary 拼接，
+-- 避免替换结果被随后的搜索状态覆盖
+---@param ctx VVReplaceCtx
+---@param loading VVReplaceLoadingToken
+---@param summary string
+---@param is_error? boolean
+local function refresh_after_write(ctx, loading, summary, is_error)
+  Render.render_status(ctx, summary, is_error)
+  Search.search_now(ctx, function()
+    local last = ctx.state.last_status
+    if last and last.text ~= '' and not last.is_error then
+      Render.render_status(ctx, summary .. ' · ' .. last.text, is_error)
+    end
+  end)
+  loading.release()
+end
+
 ---@param ctx VVReplaceCtx
 ---@param researched boolean?  内部用：true 表示刚为本次替换重搜过，跳过新鲜度判定防无限递归
 function M.replace_all(ctx, researched)
-  if ctx.state.replacing then
+  if ctx.state.replacing or Transaction.is_busy() then
     vim.notify('vv-replace: replace in progress', vim.log.levels.WARN)
     return
   end
@@ -148,81 +235,139 @@ function M.replace_all(ctx, researched)
   ctx.state.replacing = true
   local was_modifiable = vim.bo[ctx.buf].modifiable
   vim.bo[ctx.buf].modifiable = false
-  Render.render_status(ctx, 'Preparing replacement')
+  local loading = Render.acquire_loading(ctx, progress_label('Preparing', 0, #files))
 
-  ---@type vv-utils.fs.TransactionEntry[]
-  local entries = {}
-  for _, file in ipairs(files) do
-    local ok_read, old = pcall(fs.read_all, file)
-    if not ok_read then
-      ctx.state.replacing = false
+  local function release_panel()
+    ctx.state.replacing = false
+    if vim.api.nvim_buf_is_valid(ctx.buf) then
       vim.bo[ctx.buf].modifiable = was_modifiable
-      Render.render_status(ctx, 'Replacement cancelled', true)
-      vim.notify('vv-replace: read failed: ' .. file .. '\n' .. tostring(old), vim.log.levels.ERROR)
-      return
-    end
-
-    local ok_new, new_content = pcall(compute_new_content, old, grouped[file])
-    if not ok_new then
-      ctx.state.replacing = false
-      vim.bo[ctx.buf].modifiable = was_modifiable
-      Render.render_status(ctx, 'Replacement cancelled', true)
-      vim.notify('vv-replace: ' .. file .. '\n' .. tostring(new_content), vim.log.levels.ERROR)
-      return
-    end
-
-    if new_content ~= old then
-      entries[#entries + 1] = { path = file, old = old, new = new_content }
     end
   end
 
-  local ok, err, touched = Transaction.apply(entries)
-  ctx.state.replacing = false
-  if vim.api.nvim_buf_is_valid(ctx.buf) then
-    vim.bo[ctx.buf].modifiable = was_modifiable
+  ---@param entries vv-utils.fs.TransactionEntry[]
+  local function write(entries)
+    Transaction.apply_async(entries, {
+      on_progress = function(progress)
+        loading.set_label(progress_label(STEP_LABELS[progress.step], progress.done, progress.total))
+      end,
+      on_done = function(ok, err, touched)
+        release_panel()
+        if ok or touched then vim.cmd('silent! checktime') end
+
+        if ctx.state.closed then
+          loading.release()
+          if ok then
+            vim.notify('vv-replace: replaced ' .. count_label(#entries, 'file', 'files'), vim.log.levels.INFO)
+          else
+            vim.notify('vv-replace: ' .. tostring(err), vim.log.levels.ERROR)
+          end
+          return
+        end
+
+        if not ok then
+          vim.notify('vv-replace: ' .. tostring(err), vim.log.levels.ERROR)
+          if touched then
+            refresh_after_write(ctx, loading, 'Replacement cancelled', true)
+          else
+            Render.render_status(ctx, 'Replacement cancelled', true)
+            loading.release()
+          end
+          return
+        end
+
+        Inputs.render(ctx)
+        refresh_after_write(ctx, loading, 'Replaced ' .. count_label(#entries, 'file', 'files'))
+      end,
+    })
   end
 
-  if not ok then
-    Render.render_status(ctx, 'Replacement cancelled', true)
-    vim.notify('vv-replace: ' .. tostring(err), vim.log.levels.ERROR)
-    if touched then
-      vim.cmd('silent! checktime')
-      Search.search_now(ctx)
-    end
-    return
-  end
-
-  Inputs.render(ctx)
-  Render.render_status(ctx, 'Replaced ' .. count_label(#entries, 'file', 'files'))
-  vim.cmd('silent! checktime')
-  Search.search_now(ctx)
+  prepare_entries(files, grouped, {
+    is_cancelled = function() return ctx.state.closed end,
+    on_progress = function(done, total)
+      loading.set_label(progress_label('Preparing', done, total))
+    end,
+    on_done = function(result)
+      if result.cancelled then
+        loading.release()
+        release_panel()
+        return
+      end
+      if result.error then
+        release_panel()
+        Render.render_status(ctx, 'Replacement cancelled', true)
+        loading.release()
+        vim.notify('vv-replace: ' .. result.error, vim.log.levels.ERROR)
+        return
+      end
+      write(result.entries)
+    end,
+  })
 end
 
+-- 撤回最近一次替换；面板打开时在结果区标题行显示进度，面板关闭时只经 notify 告知
 ---@param ctx VVReplaceCtx?
 function M.undo_last(ctx)
-  local ok, err, count, touched = Transaction.undo()
-  if not ok then
-    vim.notify('vv-replace: ' .. tostring(err), vim.log.levels.WARN)
-    if ctx and not ctx.state.closed then
-      Render.render_status(ctx, 'Undo cancelled', true)
-      if touched then
-        vim.cmd('silent! checktime')
-        Search.search_now(ctx)
-      end
-    elseif touched then
-      vim.cmd('silent! checktime')
-    end
+  local panel = ctx and not ctx.state.closed and vim.api.nvim_buf_is_valid(ctx.buf) and ctx or nil
+  if (panel and panel.state.replacing) or Transaction.is_busy() then
+    vim.notify('vv-replace: replace in progress', vim.log.levels.WARN)
     return
   end
 
-  vim.cmd('silent! checktime')
-  local restored = count_label(count, 'file', 'files')
-  vim.notify('vv-replace: restored ' .. restored, vim.log.levels.INFO)
-  if ctx and not ctx.state.closed and vim.api.nvim_buf_is_valid(ctx.buf) then
-    Inputs.render(ctx)
-    Render.render_status(ctx, 'Restored ' .. restored)
-    Search.search_now(ctx)
+  -- 无可撤回（无记录 / 已锁定）时同步拒绝且无副作用，直接复用其错误信息，不闪 loading
+  if not Transaction.can_undo() then
+    local _, err = Transaction.undo()
+    vim.notify('vv-replace: ' .. tostring(err), vim.log.levels.WARN)
+    if panel then Render.render_status(panel, 'Undo cancelled', true) end
+    return
   end
+
+  local loading, was_modifiable
+  if panel then
+    panel.state.replacing = true
+    was_modifiable = vim.bo[panel.buf].modifiable
+    vim.bo[panel.buf].modifiable = false
+    loading = Render.acquire_loading(panel, 'Restoring')
+  end
+
+  Transaction.undo_async({
+    on_progress = function(progress)
+      if not loading then return end
+      local verb = progress.step == 'validate' and 'Checking' or 'Restoring'
+      loading.set_label(progress_label(verb, progress.done, progress.total))
+    end,
+    on_done = function(ok, err, count, touched)
+      if panel then
+        panel.state.replacing = false
+        if vim.api.nvim_buf_is_valid(panel.buf) then
+          vim.bo[panel.buf].modifiable = was_modifiable
+        end
+      end
+      if ok or touched then vim.cmd('silent! checktime') end
+      local open = panel and not panel.state.closed
+
+      if not ok then
+        vim.notify('vv-replace: ' .. tostring(err), vim.log.levels.WARN)
+        if not open then
+          if loading then loading.release() end
+        elseif touched then
+          refresh_after_write(panel, loading, 'Undo cancelled', true)
+        else
+          Render.render_status(panel, 'Undo cancelled', true)
+          loading.release()
+        end
+        return
+      end
+
+      local restored = count_label(count or 0, 'file', 'files')
+      vim.notify('vv-replace: restored ' .. restored, vim.log.levels.INFO)
+      if not open then
+        if loading then loading.release() end
+        return
+      end
+      Inputs.render(panel)
+      refresh_after_write(panel, loading, 'Restored ' .. restored)
+    end,
+  })
 end
 
 ---@return boolean
@@ -231,3 +376,13 @@ function M._can_undo()
 end
 
 return M
+
+---@class VVReplacePrepareResult
+---@field entries? vv-utils.fs.TransactionEntry[]  内容有变化的文件
+---@field error? string  首个读取或拼接失败
+---@field cancelled? boolean  is_cancelled 为真提前停止
+
+---@class VVReplacePrepareOpts
+---@field is_cancelled fun(): boolean  每片开始前检查
+---@field on_progress fun(done: integer, total: integer)  每片结束后触发
+---@field on_done fun(result: VVReplacePrepareResult)  只触发一次

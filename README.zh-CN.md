@@ -83,6 +83,7 @@
       close       = '',
       help        = '󰌌',
       title       = '',
+      fold_open   = '', fold_closed = '',  -- 结果区文件行 chevron
     },
   },
 }
@@ -121,4 +122,18 @@
 
 面板内 `<Up>` / `<Down>` 按字段回溯输入历史。历史默认写入 Neovim state 目录，关闭面板或重启 Neovim 后仍可继续回溯；不会写入项目或 dotfiles。`<C-n>` / `<C-p>` 跳到下一个 / 上一个匹配（normal 与 insert 均可），光标移动时自动预览源文件
 
+结果区（normal 模式）：`j` / `k` / `<Down>` / `<Up>` 只停在匹配行和已折叠的文件行，跳过展开的文件行；`h` / `<Left>` 折叠光标所在文件并停在文件行，`l` / `<Right>` 在折叠的文件行上展开并进入第一个匹配，其它位置保持原生行为。折叠在重新搜索后按文件路径保留，关闭面板即丢弃；折叠只影响显示，全部替换仍作用于所有匹配。文件路径按结果窗口可用宽度逐级压缩（`vv-utils.path.collapse_middle` 的 `max_width`），目录部分用 `VVReplaceFileDir` 弱化，文件名用 `VVReplaceFilePath`，chevron 用 `VVReplaceFoldIcon`，图标可通过 `icons.fold_open` / `icons.fold_closed` 修改。输入区与 insert 模式的这些按键不受影响
+
 Replace 标签右侧会显示实际生效的替换键：平时为 `\r Apply`，替换成功后动态变为 `\u Undo  \r Apply`，撤回后恢复。也可在面板外执行 `:VVReplaceUndo`。撤回前会校验文件没有被外部修改且相关 buffer 没有未保存内容；有冲突时不会写入任何文件。撤回记录保留在当前 Neovim 会话中，重启后清空
+
+## 开发测试
+
+```sh
+./tests/run.sh [literal-filter]
+```
+
+要求 Unix-like 系统、Neovim 0.12+、Git、POSIX shell 与已有 vv-utils checkout。
+默认使用开发工作区或已安装插件源码；`VV_UTILS` 可覆盖发现，`NVIM_BIN` 可指定 Neovim。不下载 vv 插件源码。
+真实搜索、替换与撤回 fixture 额外要求 ripgrep 13+（`rg`），不要求 parser 或远程服务。
+测试使用隔离 child；headless 验证不替代真实 TUI 交互。
+依赖发现、字面过滤、隔离和 CI 前提见 [共享测试契约](https://github.com/beixiyo/vv-utils.nvim/blob/main/dev/test/README.zh-CN.md)。

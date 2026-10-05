@@ -42,6 +42,8 @@
 ---@field close string        help 浮窗图标 @default ''
 ---@field help string         help 浮窗图标 @default '󰌌'
 ---@field title string        help 浮窗标题图标 @default ''
+---@field fold_open string    结果区展开文件的 chevron @default ''
+---@field fold_closed string  结果区折叠文件的 chevron @default ''
 
 ---@class VVReplaceConfigOpts
 ---@field position? 'left'|'right'
@@ -87,3 +89,5 @@
 ---@field close? string
 ---@field help? string
 ---@field title? string
+---@field fold_open? string
+---@field fold_closed? string

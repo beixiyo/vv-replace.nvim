@@ -77,6 +77,7 @@ Want my Neovim config? See <a href="https://github.com/beixiyo/dotfiles">dotfile
       plain = '󰊄', regex = '', next_input = '󰁔', toggle_mode = '󰁨',
       toggle_hidden = '󰈈', toggle_gitignored = '󰊢', goto_match = '',
       replace_all = '', undo_last = '󰕌', close = '', help = '󰌌', title = '',
+      fold_open = '', fold_closed = '',
     },
   },
 }
@@ -116,3 +117,17 @@ For Visual mode, wrap `open_visual({ scope?, use })`: `use='query'` uses the sel
 The Replace label shows the effective mapping on its right: normally `\r Apply`, then `\u Undo  \r Apply` after a successful replacement, and back to Apply after undo. You can also run `:VVReplaceUndo` outside the panel. Undo aborts without writing if a file changed externally or a related buffer has unsaved changes. The undo snapshot lasts for the current Neovim session
 
 Inside the panel, `<Up>` and `<Down>` recall per-field input history. History is stored under Neovim's state directory by default, so it remains available after reopening the panel or restarting Neovim without touching the project or dotfiles. `<C-n>` and `<C-p>` move between matches in Normal and Insert mode. Moving the cursor automatically previews the source file.
+
+In the results area (Normal mode), `j` / `k` / `<Down>` / `<Up>` stop only on match rows and folded file rows, skipping expanded file rows. `h` / `<Left>` folds the file under the cursor and moves to its file row; `l` / `<Right>` on a folded file row unfolds it and enters its first match; elsewhere these keys keep their native behavior. Folds survive re-searches by file path and are discarded when the panel closes; folding only affects display, and Replace All still applies to every match. File paths shrink to the results window width (`max_width` of `vv-utils.path.collapse_middle`), with the directory dimmed by `VVReplaceFileDir`, the file name in `VVReplaceFilePath`, and the chevron in `VVReplaceFoldIcon`; change the glyphs with `icons.fold_open` / `icons.fold_closed`. These keys are untouched in the input fields and in Insert mode.
+
+## Development tests
+
+```sh
+./tests/run.sh [literal-filter]
+```
+
+Requires Unix-like OS, Neovim 0.12+, Git, POSIX shell and an existing vv-utils checkout.
+Sources are discovered from the development workspace or installed plugins; `VV_UTILS` overrides discovery and `NVIM_BIN` selects Neovim. No vv plugin sources are downloaded.
+Real search, replacement and undo fixtures additionally require ripgrep 13+ (`rg`); no parsers or remote services are needed.
+Tests use isolated children; headless checks do not replace real TUI validation.
+See the [shared test contract](https://github.com/beixiyo/vv-utils.nvim/blob/main/dev/test/README.md) for discovery, literal filters, isolation and CI prerequisites.

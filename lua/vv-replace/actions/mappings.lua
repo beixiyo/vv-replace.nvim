@@ -5,6 +5,7 @@ local Inputs = require('vv-replace.inputs')
 local Navigation = require('vv-replace.actions.navigation')
 local Render = require('vv-replace.render')
 local Replace = require('vv-replace.replace')
+local Results = require('vv-replace.actions.results')
 local Search = require('vv-replace.search')
 
 local M = {}
@@ -66,6 +67,19 @@ local function in_input_row(ctx)
   return Inputs.field_at_row(ctx, row) ~= nil
 end
 
+-- 回落到原生按键：带上用户输入的 count，noremap 避免再次命中本映射
+---@param key string
+local function feed_native(key)
+  local count = vim.v.count > 0 and tostring(vim.v.count) or ''
+  local keys = vim.api.nvim_replace_termcodes(count .. key, true, false, true)
+  vim.api.nvim_feedkeys(keys, 'n', false)
+end
+
+---@return boolean
+local function in_normal_mode()
+  return vim.api.nvim_get_mode().mode == 'n'
+end
+
 ---@param ctx VVReplaceCtx
 ---@param opts {close:fun()}
 function M.attach(ctx, opts)
@@ -85,9 +99,11 @@ function M.attach(ctx, opts)
     Search.search_now(ctx)
   end, 'vv-replace: toggle search mode (plainText ↔ regex)')
 
+  -- 输入框内回溯历史；normal 模式在结果区时改为跳过文件行的结果移动；其余回落原生方向键
   local function navigate_history(direction, fallback)
     return function()
       if Inputs.navigate_history(ctx, direction) then return end
+      if in_normal_mode() and Results.move(ctx, direction, vim.v.count1) then return end
 
       local keys = vim.api.nvim_replace_termcodes(fallback, true, false, true)
       vim.api.nvim_feedkeys(keys, 'n', false)
@@ -108,6 +124,26 @@ function M.attach(ctx, opts)
     navigate_history(1, '<Down>'),
     'vv-replace: recall next input'
   )
+
+  -- 结果区导航与折叠只在 normal 模式映射；不在结果区时回落原生按键，输入区与 insert 模式不受影响
+  local result_keys = {
+    { lhs = 'j', run = function() return Results.move(ctx, 1, vim.v.count1) end, desc = 'next result' },
+    { lhs = 'k', run = function() return Results.move(ctx, -1, vim.v.count1) end, desc = 'previous result' },
+    { lhs = '<Down>', run = function() return Results.move(ctx, 1, vim.v.count1) end, desc = 'next result' },
+    { lhs = '<Up>', run = function() return Results.move(ctx, -1, vim.v.count1) end, desc = 'previous result' },
+    { lhs = 'h', run = function() return Results.fold(ctx) end, desc = 'fold file' },
+    { lhs = '<Left>', run = function() return Results.fold(ctx) end, desc = 'fold file' },
+    { lhs = 'l', run = function() return Results.unfold(ctx) end, desc = 'unfold file' },
+    { lhs = '<Right>', run = function() return Results.unfold(ctx) end, desc = 'unfold file' },
+  }
+  for _, item in ipairs(result_keys) do
+    -- 与历史键相同的方向键已在 navigate_history 里处理结果区移动，避免覆盖其 insert/normal 映射
+    if item.lhs ~= keymaps.history_prev and item.lhs ~= keymaps.history_next then
+      map(buf, 'n', item.lhs, function()
+        if not item.run() then feed_native(item.lhs) end
+      end, 'vv-replace: ' .. item.desc)
+    end
+  end
 
   if ctx.scope ~= 'file' then
     map_toggle(buf, keymaps.toggle_hidden, function()

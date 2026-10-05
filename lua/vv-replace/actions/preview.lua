@@ -32,9 +32,10 @@ function M.apply_file_diff(ctx, filename, namespace)
   ctx.state.preview_bufs = ctx.state.preview_bufs or {}
   ctx.state.preview_bufs[preview_buf] = true
 
+  -- 读全部匹配而非按行映射的 result_marks：折叠文件的匹配不渲染，但源文件预览仍要标出
   local file_marks = {}
-  for _, mark in pairs(ctx.state.result_marks) do
-    if mark.kind == 'match' and mark.filename == filename and mark.submatches then
+  for _, mark in ipairs(ctx.state.result_matches or {}) do
+    if mark.filename == filename and mark.submatches then
       file_marks[#file_marks + 1] = mark
     end
   end

@@ -192,6 +192,14 @@ local function parse_ndjson_chunk(text, buffer)
   return parsed, combined:sub(start)
 end
 
+-- 释放 debounce 等待期间的 loading 登记（真正开始搜索、空搜索或 debounce 被取消时）
+---@param ctx VVReplaceCtx
+local function release_debounce_loading(ctx)
+  local token = ctx.state.debounce_loading
+  ctx.state.debounce_loading = nil
+  if token then token.release() end
+end
+
 -- 取消上一次搜索（kill 进程 + 关 timer）
 ---@param ctx VVReplaceCtx
 local function abort_current(ctx)
@@ -206,6 +214,10 @@ end
 ---@param on_done fun()?  本次搜索完成（写完 last_json）后回调，供 replace 等到新鲜结果再继续
 local function run_search(ctx, on_done)
   if ctx.state.closed then return end
+  -- 本次请求的 loading 登记：先登记再中止旧搜索，帧在新旧交接时不中断；
+  -- 每个请求只释放自己的登记，旧搜索的迟到回调不会撤掉新搜索的帧
+  local loading = Render.acquire_loading(ctx, 'Searching')
+  release_debounce_loading(ctx)
   abort_current(ctx)
 
   local values = Inputs.get_values(ctx)
@@ -226,6 +238,7 @@ local function run_search(ctx, on_done)
     ctx.state.searching = false
     Render.clear_results(ctx)
     Render.render_status(ctx, 'Error: ' .. args_error, true)
+    loading.release()
     return
   end
 
@@ -237,6 +250,7 @@ local function run_search(ctx, on_done)
     ctx.state.searching = false
     Render.clear_results(ctx)
     Render.render_status(ctx, '')
+    loading.release()
     return
   end
 
@@ -247,6 +261,7 @@ local function run_search(ctx, on_done)
   local stdout_buf = ''
   local stderr_buf = ''
   local finished = false
+  local aborted = false
   local max = ctx.config.max_results
   local truncated = false
 
@@ -281,7 +296,10 @@ local function run_search(ctx, on_done)
     if finished then return end
     finished = true
     vim.schedule(function()
-      if ctx.state.closed then return end
+      if aborted or ctx.state.closed then
+        loading.release()
+        return
+      end
       -- flush 最后一段
       if #stdout_buf > 0 then
         local ok, obj = pcall(vim.json.decode, stdout_buf)
@@ -291,7 +309,7 @@ local function run_search(ctx, on_done)
       ctx.state.searching = false
       local filtered = filter_by_range(collected, ctx.target_range)
       ctx.state.last_json = filtered
-      -- 与 last_json 同步记录其来源输入：被 abort/kill 的旧搜索因上方 finished 守卫不会走到这里，
+      -- 与 last_json 同步记录其来源输入：被取代的搜索即使已退出，也由上方 aborted 守卫阻止交付，
       -- 故 last_searched_inputs 始终对应当前 last_json，replace 据此判新鲜
       ctx.state.last_searched_inputs = vim.deepcopy(values)
 
@@ -310,15 +328,22 @@ local function run_search(ctx, on_done)
         Render.render_status(ctx, status)
       end
 
-      -- 结果已落盘且渲染完毕，通知等待方（如 replace 重搜后继续）
+      -- 结果已落盘且渲染完毕，通知等待方（如 replace 重搜后继续）；帧持续到这里才撤
       if on_done then on_done() end
+      loading.release()
     end)
   end)
 
   ctx.state.rg_abort = function()
-    if finished then return end
-    finished = true
-    pcall(function() job:kill('sigterm') end)
+    if aborted then return end
+    -- 进程已退出不等于结果已交付：取消仍须使排队的渲染与 on_done 失效
+    aborted = true
+
+    if not finished then
+      finished = true
+      pcall(function() job:kill('sigterm') end)
+    end
+    loading.release()
   end
 end
 
@@ -342,6 +367,10 @@ function M.on_change(ctx)
   if not values.search or values.search == '' then
     run_search(ctx)
     return
+  end
+  -- debounce 等待期间状态栏仍是上一次的 "N matches"：一进来就登记 loading，真正搜索时交接给请求自己的登记
+  if not ctx.state.debounce_loading then
+    ctx.state.debounce_loading = Render.acquire_loading(ctx, 'Searching')
   end
   timer:start(ctx.config.debounce_ms, 0, vim.schedule_wrap(function()
     if ctx.state.closed then return end

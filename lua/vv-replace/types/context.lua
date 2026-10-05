@@ -26,13 +26,19 @@
 ---@field rg_abort fun()?  当前搜索可中止
 ---@field result_marks table<integer, VVReplaceResultMark>  key=buffer row
 ---@field result_extmark_ids integer[]  结果区的高亮 extmark id，清结果时统一删
+---@field result_files VVReplaceFileGroup[]?  最近一次搜索的文件分组，折叠 / resize 重排时复用
+---@field result_matches VVReplaceMatchItem[]?  全部匹配（含折叠未渲染的），供源窗口预览 diff
+---@field folded_files table<string, true>?  折叠的文件（key=filename），刷新时按路径保留，面板关闭即丢弃
+---@field layout_width integer?  最近一次排版用的文本区宽度，resize 时判断是否需要重排
 ---@field preview_ns integer?  预览 diff 高亮/虚拟文本用的 namespace
 ---@field preview_bufs table<integer, true>?  已打过预览 diff 的 buffer 集合，切换/关闭时逐个清 extmark
 ---@field last_status { text: string, is_error?: boolean }?  最近一次正式 status，供 flash 还原
 ---@field last_json any[]?  上次完整的 rg json 数组，供 replace 复用
 ---@field last_searched_inputs table<string, string>?  最近一次实际跑搜索（写 last_json）所用的输入快照，供 replace 判新鲜
 ---@field searching boolean
----@field replacing boolean
+---@field replacing boolean  替换或撤回正在读写文件；期间面板不可编辑、拒绝再次替换
+---@field loading_slot vv-utils.loading.Slot?  header 行的共享 loading（搜索与替换共用）；忙时状态文案只记录不绘制
+---@field debounce_loading VVReplaceLoadingToken?  输入变化后 debounce 等待期间的 loading 登记
 ---@field closed boolean
 
 ---@class VVReplaceOpenOpts

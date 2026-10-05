@@ -72,6 +72,8 @@ local defaults = {
     close       = '',    -- help: Panel / close
     help        = '󰌌',     -- help: Panel / help
     title       = '',  -- help panel 标题图标
+    fold_open   = '',   -- 结果区展开文件的 chevron
+    fold_closed = '',   -- 结果区折叠文件的 chevron
   },
 }
 

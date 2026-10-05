@@ -15,6 +15,7 @@ local Search = require('vv-replace.search')
 local Highlight = require('vv-replace.highlight')
 local Actions = require('vv-replace.actions')
 local PanelState = require('vv-replace.panel_state')
+local Render = require('vv-replace.render')
 
 local M = {}
 
@@ -111,6 +112,7 @@ local function build_ctx(config, opts)
     state = {
       result_marks = {},
       result_extmark_ids = {},
+      folded_files = {},
       searching = false,
       replacing = false,
       closed = false,
@@ -150,6 +152,8 @@ local function attach_autocmds(ctx)
       if ctx.state.closed or not vim.api.nvim_win_is_valid(ctx.win) then return end
       ctx.panel_state:on_resize(ctx.win)
       Inputs.render(ctx)
+      -- 路径按结果窗口宽度压缩，宽度变了就重排（只重写结果区，不重跑 rg）
+      Render.on_resize(ctx)
     end,
   })
 
@@ -272,6 +276,8 @@ local function finalize(ctx)
   stop_timer(ctx.state.flash_timer)
   ctx.state.search_timer = nil
   ctx.state.flash_timer = nil
+  ctx.state.debounce_loading = nil
+  Render.dispose_loading(ctx)
 
   if ctx.source_buf and vim.api.nvim_buf_is_valid(ctx.source_buf) then
     pcall(vim.api.nvim_buf_clear_namespace, ctx.source_buf, ctx.namespace, 0, -1)
