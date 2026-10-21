@@ -344,6 +344,7 @@ function M.undo_last(ctx)
       end
       if ok or touched then vim.cmd('silent! checktime') end
       local open = panel and not panel.state.closed
+      ---@cast panel VVReplaceCtx  -- open 为真时 panel 必然存在；LuaLS 不会从别名条件收窄
 
       if not ok then
         vim.notify('vv-replace: ' .. tostring(err), vim.log.levels.WARN)

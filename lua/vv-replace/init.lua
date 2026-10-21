@@ -79,13 +79,13 @@ local defaults = {
 
 
 ---@type VVReplaceConfig
-local config = defaults
+local config = vim.deepcopy(defaults)
 
----@param opts? VVReplaceConfigOpts
-function M.setup(opts)
-  local configured_state = opts and opts.state
-  config = vim.tbl_deep_extend('force', defaults, opts or {})
-  config.state = configured_state or require('vv-utils.state').register('vv-replace', 'panel')
+---@param opts? VVReplaceOpts
+---@param deps? VVReplaceDeps
+function M.setup(opts, deps)
+  config = vim.tbl_deep_extend('force', vim.deepcopy(defaults), opts or {})
+  config.state = (deps and deps.state) or require('vv-utils.state').register('vv-replace', 'panel')
   config.width = PanelState.load_width(config.state, config.width)
 
   require('vv-replace.inputs').setup_history({ persist = config.history_persist })

@@ -48,7 +48,7 @@
   dependencies = { 'beixiyo/vv-utils.nvim' },
   cmd = { 'VVReplace', 'VVReplaceFile', 'VVReplaceClose', 'VVReplaceToggle', 'VVReplaceUndo' },
   keys = { '<leader>sR', '<leader>sr' },
-  ---@type VVReplaceConfig
+  ---@type VVReplaceOpts
   opts = {
     position = 'right',            -- 'left' | 'right'
     width = 60,                    -- 初始面板宽度
@@ -102,9 +102,8 @@
 | `default_mode` | `'plainText' \| 'regex'` | `'plainText'` | 默认搜索模式 |
 | `rg_extra_args` | `string[]` | `{}` | 追加给所有 rg 调用的额外参数（如 `{ '--hidden' }`） |
 | `history_persist` | `boolean` | `true` | 把各字段最近 50 条历史写入 `stdpath('state')/vv-replace/history.json`；设为 `false` 仅在当前会话保留 |
-| `state` | `VVStateHandle` | `vv-utils.state.register('vv-replace', 'panel')` | 可选的状态句柄注入，供自定义存储或测试 |
-| `keymaps` | `VVReplaceKeymaps` | *见上方* | 面板内键位，可逐项覆盖 |
-| `icons` | `VVReplaceIcons` | *见上方* | NerdFont 图标；非 NerdFont 用户可改 ASCII |
+| `keymaps` | `VVReplaceKeymapsOpts` | *见上方* | 面板内键位，可逐项覆盖 |
+| `icons` | `VVReplaceIconsOpts` | *见上方* | NerdFont 图标；非 NerdFont 用户可改 ASCII |
 
 ### 入口键位
 
@@ -118,7 +117,7 @@
 | `<leader>sR`（visual） | `open_visual({ use='query' })`：选区作搜索词，工作区替换 |
 | `<leader>sv`（visual） | `open_visual({ scope='file', use='range' })`：仅在选中行内查找替换 |
 
-`next_input` 默认使用 `<C-j>`，因此 `<Tab>` 始终专用于补全，`<CR>` 也不负责跳输入框；设为 `false` 可关闭字段循环
+`next_input` 默认使用 `<C-j>`，因此 `<Tab>` 始终专用于补全，`<CR>` 也不负责跳输入框；设为 `false` 可关闭字段循环；不写（`nil`）则取默认值
 
 面板内 `<Up>` / `<Down>` 按字段回溯输入历史。历史默认写入 Neovim state 目录，关闭面板或重启 Neovim 后仍可继续回溯；不会写入项目或 dotfiles。`<C-n>` / `<C-p>` 跳到下一个 / 上一个匹配（normal 与 insert 均可），光标移动时自动预览源文件
 
@@ -132,8 +131,8 @@ Replace 标签右侧会显示实际生效的替换键：平时为 `\r Apply`，�
 ./tests/run.sh [literal-filter]
 ```
 
-要求 Unix-like 系统、Neovim 0.12+、Git、POSIX shell 与已有 vv-utils checkout。
-默认使用开发工作区或已安装插件源码；`VV_UTILS` 可覆盖发现，`NVIM_BIN` 可指定 Neovim。不下载 vv 插件源码。
-真实搜索、替换与撤回 fixture 额外要求 ripgrep 13+（`rg`），不要求 parser 或远程服务。
-测试使用隔离 child；headless 验证不替代真实 TUI 交互。
-依赖发现、字面过滤、隔离和 CI 前提见 [共享测试契约](https://github.com/beixiyo/vv-utils.nvim/blob/main/dev/test/README.zh-CN.md)。
+要求 Unix-like 系统、Neovim 0.12+、Git、POSIX shell 与已有 vv-utils checkout
+默认使用开发工作区或已安装插件源码；`VV_UTILS` 可覆盖发现，`NVIM_BIN` 可指定 Neovim。不下载 vv 插件源码
+真实搜索、替换与撤回 fixture 额外要求 ripgrep 13+（`rg`），不要求 parser 或远程服务
+测试使用隔离 child；headless 验证不替代真实 TUI 交互
+依赖发现、字面过滤、隔离和 CI 前提见 [共享测试契约](https://github.com/beixiyo/vv-utils.nvim/blob/main/dev/test/README.zh-CN.md)

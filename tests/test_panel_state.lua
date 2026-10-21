@@ -17,7 +17,7 @@ T['调整宽度、关闭与退出均保存宽度且新进程可恢复'] = functi
       vim.api.nvim_exec_autocmds('WinResized', {})
     end
     Replace.setup({ width = 29, width_save_debounce_ms = 20, debounce_ms = 60000,
-      history_persist = false, state = state })
+      history_persist = false }, { state = state })
     Replace.open()
     local ctx = assert(Buffer.current)
     assert(vim.api.nvim_win_get_width(ctx.win) == 29, '非法宽度必须回落到配置宽度')
@@ -51,7 +51,7 @@ T['调整宽度、关闭与退出均保存宽度且新进程可恢复'] = functi
     local Replace = require('vv-replace')
     local Buffer = require('vv-replace.buffer')
     local state = State.register('vv-replace', 'panel', { path = vim.fs.joinpath(vim.env.VV_TEST_TMP, 'state.json') })
-    Replace.setup({ width = 29, debounce_ms = 60000, history_persist = false, state = state })
+    Replace.setup({ width = 29, debounce_ms = 60000, history_persist = false }, { state = state })
     Replace.open()
     local width = vim.api.nvim_win_get_width(assert(Buffer.current).win)
     Replace.close()

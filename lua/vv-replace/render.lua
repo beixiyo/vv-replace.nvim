@@ -308,7 +308,7 @@ local function paint(ctx)
   local layout = M.layout(ctx.state.result_files or {}, {
     width = width,
     folded = ctx.state.folded_files,
-    icons = ctx.config and ctx.config.icons,
+    icons = ctx.config.icons,
   })
 
   local header_row = get_header_row(ctx)

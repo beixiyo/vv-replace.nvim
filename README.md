@@ -49,7 +49,7 @@ Want my Neovim config? See <a href="https://github.com/beixiyo/dotfiles">dotfile
   dependencies = { 'beixiyo/vv-utils.nvim' },
   cmd = { 'VVReplace', 'VVReplaceFile', 'VVReplaceClose', 'VVReplaceToggle', 'VVReplaceUndo' },
   keys = { '<leader>sR', '<leader>sr' },
-  ---@type VVReplaceConfig
+  ---@type VVReplaceOpts
   opts = {
     position = 'right',
     width = 60,
@@ -96,9 +96,8 @@ Want my Neovim config? See <a href="https://github.com/beixiyo/dotfiles">dotfile
 | `default_mode` | `'plainText' \| 'regex'` | `'plainText'` | Initial search mode |
 | `rg_extra_args` | `string[]` | `{}` | Extra arguments for every ripgrep invocation |
 | `history_persist` | `boolean` | `true` | Store the latest 50 entries per field in `stdpath('state')/vv-replace/history.json`; set to `false` for session-only history |
-| `state` | `VVStateHandle` | `vv-utils.state.register('vv-replace', 'panel')` | Optional state handle injection for custom storage or tests |
-| `keymaps` | `VVReplaceKeymaps` | See above | Overridable panel mappings |
-| `icons` | `VVReplaceIcons` | See above | Nerd Font icons; ASCII is also supported |
+| `keymaps` | `VVReplaceKeymapsOpts` | See above | Overridable panel mappings |
+| `icons` | `VVReplaceIconsOpts` | See above | Nerd Font icons; ASCII is also supported |
 
 ### Entry mappings
 
@@ -112,7 +111,7 @@ For Visual mode, wrap `open_visual({ scope?, use })`: `use='query'` uses the sel
 | `<leader>sR` in Visual mode | `open_visual({ use='query' })` |
 | `<leader>sv` in Visual mode | `open_visual({ scope='file', use='range' })` |
 
-`next_input` defaults to `<C-j>`, leaving `<Tab>` dedicated to completion and `<CR>` free from field navigation. Set it to `false` to disable field cycling.
+`next_input` defaults to `<C-j>`, leaving `<Tab>` dedicated to completion and `<CR>` free from field navigation. Set it to `false` to disable field cycling; leaving a key unset (`nil`) keeps the default.
 
 The Replace label shows the effective mapping on its right: normally `\r Apply`, then `\u Undo  \r Apply` after a successful replacement, and back to Apply after undo. You can also run `:VVReplaceUndo` outside the panel. Undo aborts without writing if a file changed externally or a related buffer has unsaved changes. The undo snapshot lasts for the current Neovim session
 

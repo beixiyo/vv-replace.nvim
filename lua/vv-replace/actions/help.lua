@@ -6,7 +6,7 @@ local M = {}
 
 ---@param ctx VVReplaceCtx
 function M.open(ctx)
-  local ic = ctx.config and ctx.config.icons or {}
+  local ic = ctx.config.icons
   local actions = {
     ['toggle search mode (plainText ↔ regex)'] = { cat = 'Navigate', icon = ic.toggle_mode },
     ['recall previous input'] = { cat = 'Navigate', icon = ic.prev_match },

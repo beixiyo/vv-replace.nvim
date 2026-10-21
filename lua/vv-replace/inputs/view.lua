@@ -12,7 +12,7 @@ local function key_label(ctx, name)
   local label = ctx.keymap_labels and ctx.keymap_labels[name]
   if label then return label end
 
-  local lhs = ctx.config and ctx.config.keymaps and ctx.config.keymaps[name]
+  local lhs = ctx.config.keymaps[name]
   if type(lhs) ~= 'string' or lhs == '' then return nil end
   return Input.display_key(lhs)
 end
@@ -27,7 +27,7 @@ end
 ---@param ctx VVReplaceCtx
 ---@return string
 local function panel_winbar(ctx)
-  local ic = ctx.config and ctx.config.icons or {}
+  local ic = ctx.config.icons
   local title = Input.action_hint(ic.title, 'Replace') or 'Replace'
   local hints = {}
 
@@ -83,10 +83,10 @@ end
 ---@param ctx VVReplaceCtx
 ---@return table<string, string>
 function M.mode_display(ctx)
-  local ic = ctx.config and ctx.config.icons or {}
+  local ic = ctx.config.icons
   return {
-    plainText = (ic.plain or 'T') .. ' Plain',
-    regex = (ic.regex or '.*') .. ' Regex',
+    plainText = ic.plain .. ' Plain',
+    regex = ic.regex .. ' Regex',
   }
 end
 
@@ -101,9 +101,9 @@ end
 ---@param field VVReplaceField
 ---@return table[]
 function M.search_label(ctx, field)
-  local km = ctx.config and ctx.config.keymaps or {}
-  local ic = ctx.config and ctx.config.icons or {}
-  local toggle_key = km.toggle_mode or '<S-Tab>'
+  local km = ctx.config.keymaps
+  local ic = ctx.config.icons
+  local toggle_key = km.toggle_mode
   local toggle_hint = Input.action_hint(ic.toggle_mode, Input.display_key(toggle_key))
   local chunks = {
     { ' ' .. field.label, 'VVReplaceLabel' },
@@ -113,18 +113,22 @@ function M.search_label(ctx, field)
 
   if ctx.scope ~= 'file' then
     local enabled = {}
-    if ctx.show_hidden then enabled[#enabled + 1] = (ic.toggle_hidden or '') .. ' hidden' end
-    if ctx.show_ignored then enabled[#enabled + 1] = (ic.toggle_gitignored or '') .. ' ignored' end
+    if ctx.show_hidden then enabled[#enabled + 1] = ic.toggle_hidden .. ' hidden' end
+    if ctx.show_ignored then enabled[#enabled + 1] = ic.toggle_gitignored .. ' ignored' end
 
     if #enabled > 0 then
       chunks[#chunks + 1] = { '    ' .. table.concat(enabled, '  '), 'VVReplaceLabelMode' }
     else
-      local hidden_key = Input.display_key(first_key(km.toggle_hidden) or '.')
-      local ignored_key = Input.display_key(first_key(km.toggle_gitignored) or 'I')
-      chunks[#chunks + 1] = {
-        '  (' .. hidden_key .. ' hidden, ' .. ignored_key .. ' ignored)',
-        'VVReplacePlaceholder',
-      }
+      -- 空列表表示未映射：没有按键的项不显示提示
+      local hints = {}
+      local hidden_key = first_key(km.toggle_hidden)
+      local ignored_key = first_key(km.toggle_gitignored)
+      if hidden_key then hints[#hints + 1] = Input.display_key(hidden_key) .. ' hidden' end
+      if ignored_key then hints[#hints + 1] = Input.display_key(ignored_key) .. ' ignored' end
+
+      if #hints > 0 then
+        chunks[#chunks + 1] = { '  (' .. table.concat(hints, ', ') .. ')', 'VVReplacePlaceholder' }
+      end
     end
   end
 
@@ -142,7 +146,7 @@ end
 ---@param field VVReplaceField
 ---@return table[]
 function M.replace_label(ctx, field)
-  local ic = ctx.config and ctx.config.icons or {}
+  local ic = ctx.config.icons
   local apply = Input.action_hint(ic.replace_all, key_label(ctx, 'replace_all'), 'Apply') or 'Apply'
   local hints = { apply }
 
@@ -224,7 +228,7 @@ function M.render(ctx, fields, all_fields)
   end
 
   local header_row = #fields
-  local ic = ctx.config and ctx.config.icons or {}
+  local ic = ctx.config.icons
   local previous = Input.action_hint(ic.prev_match, key_label(ctx, 'prev_match'))
   local next = Input.action_hint(ic.next_match, key_label(ctx, 'next_match'))
   local open = Input.action_hint(ic.goto_match, key_label(ctx, 'goto_match'), 'Open')

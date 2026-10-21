@@ -1,12 +1,26 @@
 # Changelog
 
+## 0.6.0 - 2026-10-21
+
+### Breaking
+
+- 输入类型统一为 `VVReplaceOpts`，移除 `VVReplaceConfigOpts`，不保留别名
+- `state` 改由 `setup(opts, deps)` 的 `deps.state` 注入，`opts.state` 不再生效
+- setup() 不再返回配置，需要时用 get_config()
+
+### Changed
+
+- `keymaps.next_input` 设为 `false` 禁用
+- `setup()` 合并前深拷贝默认值
+- 读取配置处不再重复写 `or 默认值`
+
 ## 0.5.0 - 2026-10-04
 
 - 全部替换与撤回改为分片异步读写
 - 搜索从输入防抖开始隐藏陈旧计数，延迟 150ms 显示 loading
 - 替换 / 撤回结果与重搜计数合并显示，不再被搜索提示覆盖
 - 写入前关闭面板取消操作；写入后关闭面板仍完成事务或回滚，并通过通知告知结果
-- 结果区按文件折叠：`h` / `←` 折叠，`l` / `→` 展开，`j/k` / `↑/↓` 
+- 结果区按文件折叠：`h` / `←` 折叠，`l` / `→` 展开，`j/k` / `↑/↓`
 - 文件路径随窗口宽度压缩，新增 `VVReplaceFileDir` / `VVReplaceFoldIcon` 高亮与 `icons.fold_open` / `icons.fold_closed`
 - 结果区移除文件组间空行与行号后的冒号
 

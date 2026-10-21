@@ -27,7 +27,7 @@
 ---@class VVReplaceLayoutOpts
 ---@field width? integer  结果窗口文本区宽度；nil 时路径只做第一级折叠
 ---@field folded? table<string, true>  折叠的文件（key=filename）
----@field icons? VVReplaceIcons  取 fold_open / fold_closed；缺省用内置 chevron
+---@field icons? VVReplaceIconsConfig  取 fold_open / fold_closed；缺省用内置 chevron
 
 ---@class VVReplaceParseOpts: VVReplaceLayoutOpts
 ---@field root? string  显示路径的相对根

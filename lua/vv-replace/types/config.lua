@@ -1,4 +1,5 @@
----@class VVReplaceConfig
+---用户可配置的全部字段（不含运行时派生值）
+---@class VVReplaceSettings
 ---@field position 'left'|'right'  侧边面板位置 @default 'right'
 ---@field width integer  面板宽度（列） @default 60
 ---@field width_save_debounce_ms integer  resize 后持久化宽度的防抖毫秒 @default 120
@@ -8,11 +9,14 @@
 ---@field default_mode 'plainText'|'regex' @default 'plainText'
 ---@field rg_extra_args string[]  追加给所有 rg 调用的额外参数 @default {}
 ---@field history_persist boolean  跨 Neovim 重启持久化输入历史 @default true
----@field state VVStateHandle?  面板持久状态句柄，主要用于自定义存储或测试 @default register('vv-replace', 'panel')
----@field keymaps VVReplaceKeymaps
----@field icons VVReplaceIcons
+---@field keymaps VVReplaceKeymapsConfig
+---@field icons VVReplaceIconsConfig
 
----@class VVReplaceKeymaps
+---解析后的完整配置。`state` 是 setup 合并之后派生的句柄，不属于用户输入
+---@class VVReplaceConfig: VVReplaceSettings
+---@field state? VVStateHandle  面板持久状态句柄；setup 时由 `vv-utils.state.register('vv-replace', 'panel')` 创建，或由 setup 的 deps.state 注入
+
+---@class VVReplaceKeymapsConfig
 ---@field next_input string|false  切换到下一个输入框；false 不绑定 @default '<C-j>'
 ---@field toggle_mode string  Shift-Tab：切换模式 plainText ↔ regex @default '<S-Tab>'
 ---@field history_prev string  当前输入框的更早历史（normal + insert） @default '<Up>'
@@ -27,7 +31,7 @@
 ---@field close string @default 'q'
 ---@field help string @default 'g?'
 
----@class VVReplaceIcons
+---@class VVReplaceIconsConfig
 ---@field plain string        mode 徽章：plainText（默认 NerdFont text-box） @default '󰊄'
 ---@field regex string        mode 徽章：regex（默认 NerdFont regex） @default ''
 ---@field next_input string   help 浮窗图标 @default '󰁔'
@@ -45,49 +49,13 @@
 ---@field fold_open string    结果区展开文件的 chevron @default ''
 ---@field fold_closed string  结果区折叠文件的 chevron @default ''
 
----@class VVReplaceConfigOpts
----@field position? 'left'|'right'
----@field width? integer
----@field width_save_debounce_ms? integer
----@field debounce_ms? integer
----@field max_results? integer
----@field context_lines? integer
----@field default_mode? 'plainText'|'regex'
----@field rg_extra_args? string[]
----@field history_persist? boolean
----@field state? VVStateHandle
+---setup 输入类型：所有字段可选，嵌套表递归合并，`false` 禁用，nil 取默认值
+---@class (partial) VVReplaceKeymapsOpts: VVReplaceKeymapsConfig
+---@class (partial) VVReplaceIconsOpts: VVReplaceIconsConfig
+---@class (partial) VVReplaceOpts: VVReplaceSettings
 ---@field keymaps? VVReplaceKeymapsOpts
 ---@field icons? VVReplaceIconsOpts
 
----@class VVReplaceKeymapsOpts
----@field next_input? string|false
----@field toggle_mode? string
----@field history_prev? string
----@field history_next? string
----@field toggle_hidden? string|string[]
----@field toggle_gitignored? string|string[]
----@field replace_all? string
----@field undo_last? string
----@field goto_match? string
----@field next_match? string
----@field prev_match? string
----@field close? string
----@field help? string
-
----@class VVReplaceIconsOpts
----@field plain? string
----@field regex? string
----@field next_input? string
----@field toggle_mode? string
----@field toggle_hidden? string
----@field toggle_gitignored? string
----@field goto_match? string
----@field next_match? string
----@field prev_match? string
----@field replace_all? string
----@field undo_last? string
----@field close? string
----@field help? string
----@field title? string
----@field fold_open? string
----@field fold_closed? string
+---setup 的运行时依赖注入，不属于用户配置
+---@class VVReplaceDeps
+---@field state? VVStateHandle  自定义状态存储，主要用于测试 @default vv-utils.state.register('vv-replace', 'panel')

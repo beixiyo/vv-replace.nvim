@@ -76,7 +76,7 @@ local function build_rg_args(ctx, values)
   end
 
   -- context
-  if ctx.config.context_lines and ctx.config.context_lines > 0 then
+  if ctx.config.context_lines > 0 then
     args[#args + 1] = '--context=' .. tostring(ctx.config.context_lines)
   end
 
@@ -102,7 +102,7 @@ local function build_rg_args(ctx, values)
   end
 
   -- 额外用户参数
-  for _, extra in ipairs(ctx.config.rg_extra_args or {}) do
+  for _, extra in ipairs(ctx.config.rg_extra_args) do
     args[#args + 1] = extra
   end
 
